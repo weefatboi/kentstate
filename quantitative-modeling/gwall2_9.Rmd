@@ -1,0 +1,30 @@
+---
+title: "Assignment 9 - BIP Problem"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Formulate BIP model
+(file arclp.lp)
+
+##Read Model
+```{r}
+library(lpSolve)
+library(lpSolveAPI)
+arc <- read.lp("arclp.lp")
+arc
+```
+
+##Solve Model
+```{r}
+solve(arc)
+get.objective(arc)
+get.variables(arc)
+```
+
+##Interpret
+
+The critical path is found by the model to be a time duration (path length) of **17**. This is the longest arc path in our project network and follows the path from **node 1 -> node 2 -> node 4 -> node 7 -> node 9**. Assignment 9 is complete. However, real-world interpretation of this network model could use the results to determine what the critical path of their manufacturing process is, allowing them to implement efficiency solutions to cut time duration off this path and shorten their overall manufacturing process, thus being able to create and sell goods to consumers faster.

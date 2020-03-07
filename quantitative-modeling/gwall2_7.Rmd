@@ -1,0 +1,145 @@
+---
+title: "Assignment 7 - DEA"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(lpSolve)
+library(lpSolveAPI)
+library(Benchmarking)
+```
+
+##DMU1 Formulation
+
+```{r}
+dmu1 <- read.lp("DMU1.lp")
+dmu1
+solve(dmu1)
+get.objective(dmu1)
+get.variables(dmu1)
+```
+
+##DMU2 Formulation
+
+```{r}
+dmu2 <- read.lp("DMU2.lp")
+dmu2
+solve(dmu2)
+get.objective(dmu2)
+get.variables(dmu2)
+```
+
+##DMU3 Formulation
+
+```{r}
+dmu3 <- read.lp("DMU3.lp")
+dmu3
+solve(dmu3)
+get.objective(dmu3)
+get.variables(dmu3)
+```
+
+##DMU4 Formulation
+
+```{r}
+dmu4 <- read.lp("DMU4.lp")
+dmu4
+solve(dmu4)
+get.objective(dmu4)
+get.variables(dmu4)
+```
+
+##DMU5 Formulation
+
+```{r}
+dmu5 <- read.lp("DMU5.lp")
+dmu5
+solve(dmu5)
+get.objective(dmu5)
+get.variables(dmu5)
+```
+
+##DMU6 Formulation
+
+```{r}
+dmu6 <- read.lp("DMU6.lp")
+dmu6
+solve(dmu6)
+get.objective(dmu6)
+get.variables(dmu6)
+```
+
+##DEA Section
+
+```{r}
+x <- matrix(c(14,14,42,28,19,14,3.5,21,10.5,42,25,15),ncol = 2)
+y <- matrix(c(150,400,320,520,350,320,0.2,0.7,1.2,2.0,1.2,0.7),ncol = 2)
+colnames(y) <- c("Staff Hours/Day","Supplies/Day")
+colnames(x) <- c("Reimbursed","Private")
+x
+y
+```
+
+#CRS Analysis
+
+```{r}
+crs <- dea(x,y,RTS = "crs")
+crs
+peers(crs)
+lambda(crs)
+```
+
+#IRS Analysis
+
+```{r}
+irs <- dea(x,y,RTS = "irs")
+irs
+peers(irs)
+lambda(irs)
+```
+
+#DRS Analysis
+
+```{r}
+drs <- dea(x,y,RTS = "drs")
+drs
+peers(drs)
+lambda(drs)
+```
+
+#VRS Analysis
+
+```{r}
+vrs <- dea(x,y,RTS = "vrs")
+vrs
+peers(vrs)
+lambda(vrs)
+```
+
+#FDH Analysis
+
+```{r}
+fdh <- dea(x,y,RTS = "fdh")
+fdh
+peers(fdh)
+lambda(fdh)
+```
+
+#FRH Analysis
+
+```{r}
+add <- dea(x,y,RTS = "add")
+add
+peers(add)
+lambda(add)
+```
+
+##RESULTS:
+
+Formulation and solving of the 6 DMU's reveals that DMU 1-4 are efficient, while DMU 5 and 6 are inefficient at 97.7% and 86.7% respectively. It would seem that both CRS and DRS analysis produced the same subset of peer units for DMU(5), with peer units being 3, 4, and 6 and relative weights being 0.035, 0.48, and 0.27 respectively.Essentially, these results show us that DMU(5)'s potential efficient performance could be emulated from DMU (3,4 and 6). However, DMU(6) results indicate that while it may not be operating at maximum efficiency, that no possible combination of weights and emulation of other DMU's exists for it to reach full efficiency potential.
+
+///NOTE: I could not, for the life of me, figure out how to condense all this information into tabular format. Forgive me. Instead, I knitted the file to a github document and uploaded that to my git repository as well, so you can view the results that way. (all .lp files necessary are uploaded too) Best, Gordon///

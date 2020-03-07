@@ -1,0 +1,48 @@
+---
+title: "Assignment 8"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Question 1
+
+6x1 + 4x2 + 5x3 + y1m - y1p = 50
+8x1 + 7x2 + 5x3 + y2m - y2p = 75
+P = 20x1 + 15x2 + 25x3
+
+##Question 2
+
+Z = 20x1 + 15x2 + 25x3 - 6y1p - 6y1m - 3y2m
+
+//NOTE: weights are derived from maximization equation in question, with assignment of 6 for going either over or under the current number of employees (stability in workforce) and with assignment 3 for going under the previous earnings (some increase to keep stockholders happy, but not too much to set unreasonably high bar).//
+
+##Question 3
+
+#Formulate and Read
+
+```{r}
+library(lpSolve)
+library(lpSolveAPI)
+goalpmodel <- read.lp("goalpmodel.lp")
+goalpmodel
+```
+
+#Solve
+
+```{r}
+solve(goalpmodel)
+get.objective(goalpmodel)
+get.variables(goalpmodel)
+```
+
+#Interpret
+
+Z = 225; x1 = 0, x2 = 0, x3 = 15, y1p = 25, y1m = 0, y2m = 0, y2p = 0 (in order of appearance in .lp formulation)
+
+These results indicate that our goals for earnings (y2 plus and minus both = 0) met, meaning we stayed equal or greater to 75 million dollars in earnings (in this case, equal). However, they also indicate that while we didn't drop below our current employment level (y1m = 0), we did exceed employment by 2500 employees to achieve our optimal Z value profit maximum of 225 million dollars. If this presents a hiring issue for the company, they can choose to re-optimize with different weights/priorities to achieve a different results where employment doesn't increase so drastically however, this model is optimized and sufficient as one potential solution to meet most all their company's goals.
+
+###END

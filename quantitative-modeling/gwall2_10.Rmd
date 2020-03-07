@@ -1,0 +1,85 @@
+---
+title: "Assignment 10 - Metaheuristics"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Load Relevant packages
+```{r}
+library(dplyr)
+library(caret)
+library(ggplot2)
+# install.packages("GenSA")
+# install.packages("GA")
+library(GenSA)
+library(GA)
+```
+
+## 1. Generate random dataset with 20 (x,y) observations
+```{r}
+year = c(2000:2019)
+rate = c(8.75, 9.00, 4.75, 4.25, 4.00, 5.25, 7.5, 8.25, 7.25, 3.25, 3.25, 3.25, 3.25, 3.25, 3.25, 3.25, 3.5, 3.75, 4.5, 5.5)
+df = data.frame(year, rate)
+```
+This is a dataset containing the Federal Prime Interest Rate for each year ranging from 2000-present, recorded from January of each year.
+
+## 2. Find least-square line for df
+```{r}
+cor(df$year, df$rate)
+```
+This dataset appears to be only marginally linear, with a trend of increase by year resulting toward the second half of the scatterplot, but the infamous market crash throwing the values off in the center. The correlation of these 20 observations is reported as about -0.56, which is not ideally significant. However, we will proceed with analysis anyway as any dataset was directed to be used.
+
+```{r}
+fit = lm(rate ~ year)
+fit
+```
+b0 (Y-Intercept) is shown to be about **391.74** and b1 (Slope) is shown to be about **-0.1925**.
+
+## 3. Simulated Annealing
+```{r}
+nfun1 = function(x) {
+  (-0.1925*x + 391.741)
+}
+ll = c(2000)
+ul = c(2019)
+```
+
+```{r}
+set.seed(1234)
+output1 = GenSA(par = NULL, lower = ll, upper = ul, fn = nfun1)
+output1[c("value", "par", "counts")]
+```
+The function value (aka rate) produced by GenSA after 34569 iterations is **3.0835** which, when the par value of 2019 is plugged into the original equation for x (year), is the optimal solution.
+
+## 3. Genetic Algorithm
+```{r}
+output2 = ga(type = "real-valued", fitness = nfun1, lower = ll, upper = ul)
+summary(output2)
+```
+The solution produced by GA is significantly different than the one produced by SA. Genetic Algorithm seems to be less of an ideal modeling procedure for this dataset.
+
+## 4. Plot Results
+# Linear Regression
+```{r}
+plot(year, rate, pch = 16, cex = 1.3, col = "blue", main = "CALENDAR YEAR VS. FED PRIME RATE", xlab= "YEAR", ylab = "INTEREST RATE", abline(fit))
+```
+
+#SA
+```{r}
+curve(nfun1, from = ll, to = ul, n = 1000)
+points(output1$par, output1$value, col = 2, pch = 19)
+```
+
+#GA
+```{r}
+plot(output2)
+```
+```{r}
+curve(nfun1, from = ll, to = ul, n = 1000)
+points(output2@solution, output2@fitnessValue, col = 2, pch = 19)
+```
+The results are unclear to me. It seems that I've minimized the actual function(x) value but not the SSE value. I write this in full honesty because I've had much trouble modeling this assignment. It seems that I have a good conceptual understanding of SA/GA, but have struggled to implement the knowledge in R. I'm unsure how to proceed, but am out of time to work on this assignment since it's due this evening. I tirelessly parsed through the available example code on github, as well as scoured the internet for any and all information about modeling these methods in R, but made little progress. Any advice and leniency is appreciated. I very much would like to have a firmer grasp of these concepts and how to model them in R, so even if you must deduct some points for accuracy I'd still like to chat about what I could do better next time or what I overlooked when applying these methods. Thanks, and best. - Gordon W. Wall

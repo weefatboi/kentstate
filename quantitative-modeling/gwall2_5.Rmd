@@ -1,0 +1,119 @@
+---
+title: "Assignment 5"
+author: "gwall2"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Install relevant packages and load drivers:
+
+```{r}
+install.packages("lpSolve")
+install.packages(("lpSolveAPI"))
+library(lpSolve)
+library(lpSolveAPI)
+```
+
+##Problem:
+The Weigelt Corporation has three branch plants with excess production capacity. Fortunately, the corporation has a new product ready to begin production, and all three plants have this capability, so some of the excess capacity can be used in this way. This product can be made in three sizes--large, medium, and small--that yield a net unit profit of $420, $360, and $300, respectively. Plants 1, 2, and 3 have the excess capacity to produce 750, 900, and 450 units per day of this product, respectively, regardless of the size or combination of sizes involved.
+
+The amount of available in-process storage space also imposes a limitation on the production rates of the new product. Plants 1, 2, and 3 have 13,000, 12,000, and 5,000 square feet, respectively, of in-process storage space available for a day's production of this product. Each unit of the large, medium, and small sizes produced per day requires 20, 15, and 12 square feet, respectively.
+Sales forecasts indicate that if available, 900, 1,200, and 750 units of the large, medium, and small sizes, respectively, would be sold per day.
+
+At each plant, some employees will need to be laid off unless most of the plant’s excess production capacity can be used to produce the new product. To avoid layoffs if possible, management has decided that the plants should use the same percentage of their excess capacity to produce the new product.
+Management wishes to know how much of each of the sizes should be produced by each of the plants to maximize profit.
+
+1. Solve the problem using lpsolve, or any other equivalent library in R.
+2. Identify the shadow prices, dual solution, and reduced costs
+3. Further, identify the sensitivity of the above prices and costs
+4. Formulate the dual of the above problem and solve it. Does the solution agree with what you observed    for the primal problem?
+
+##Formulate LP Problem:
+#Designate as Maximization
+#Set objective function coefficients
+#Create constraints
+
+```{r}
+lp.model <- make.lp(0,9)
+lp.control(lp.model, sense="max")
+set.objfn(lp.model, c(420, 360, 300, 420, 360, 300, 420, 360, 300))
+add.constraint(lp.model, c(1,1,1,0,0,0,0,0,0), "<=", 750)
+add.constraint(lp.model, c(0,0,0,1,1,1,0,0,0), "<=", 900)
+add.constraint(lp.model, c(0,0,0,0,0,0,1,1,1), "<=", 450)
+add.constraint(lp.model, c(20,15,12,0,0,0,0,0,0), "<=", 13000)
+add.constraint(lp.model, c(0,0,0,20,15,12,0,0,0), "<=", 12000)
+add.constraint(lp.model, c(0,0,0,0,0,0,20,15,12), "<=", 5000)
+add.constraint(lp.model, c(1,0,0,1,0,0,1,0,0), "<=", 900)
+add.constraint(lp.model, c(0,1,0,0,1,0,0,1,0), "<=", 1200)
+add.constraint(lp.model, c(0,0,1,0,0,1,0,0,1), "<=", 750)
+add.constraint(lp.model, c(1/750,1/750,1/750,-1/900,-1/900,-1/900,0,0,0), "=", 0)
+add.constraint(lp.model, c(0,0,0,1/900,1/900,1/900,-1/450,-1/450,-1/450), "=", 0)
+add.constraint(lp.model, c(1,1,1,1,1,1,1,1,1), ">=", 0)
+```
+
+##Solve LP Problem for optimal solution:
+
+```{r}
+solve(lp.model)
+```
+
+##Display optimum values:
+
+```{r}
+get.variables(lp.model)
+```
+
+##Display value of objective function (max profit at optimal point)
+
+```{r}
+get.objective(lp.model)
+```
+
+##Find shadow prices and reduced costs:
+
+```{r}
+get.sensitivity.rhs(lp.model)
+```
+
+##Find dual solution (first 12 are constraint values, last 9 are objfn values):
+
+```{r}
+get.dual.solution(lp.model)
+```
+
+##Further sensitivity analysis of objective function coefficients and costs:
+
+```{r}
+get.sensitivity.obj(lp.model)
+get.sensitivity.rhs(lp.model)$duals
+```
+
+##Formulate the dual and solve to obtain values:
+
+```{r}
+lp.dual <- make.lp(0,11)
+lp.control(lp.dual, sense = "min", simplextype = "dual")
+set.objfn(lp.dual, c(750,900,450,13000,12000,5000,900,1200,750,0,0))
+add.constraint(lp.dual, c(1,0,0,20,0,0,1,0,0,1/750,0), ">=", 420)
+add.constraint(lp.dual, c(1,0,0,15,0,0,0,1,0,1/750,0), ">=", 360)
+add.constraint(lp.dual, c(1,0,0,12,0,0,0,0,1,1/750,0), ">=", 300)
+add.constraint(lp.dual, c(0,1,0,0,20,0,1,0,0,-1/900,1/900), ">=", 420)
+add.constraint(lp.dual, c(0,1,0,0,15,0,0,1,0,-1/900,1/900), ">=", 360)
+add.constraint(lp.dual, c(0,1,0,0,12,0,0,0,1,-1/900,1/900), ">=", 300)
+add.constraint(lp.dual, c(0,0,1,0,0,20,1,0,0,0,-1/450), ">=", 420)
+add.constraint(lp.dual, c(0,0,1,0,0,15,0,1,0,0,-1/450), ">=", 360)
+add.constraint(lp.dual, c(0,0,1,0,0,12,0,0,1,0,-1/450), ">=", 300)
+
+solve(lp.dual)
+get.variables(lp.dual)
+get.objective(lp.dual)
+```
+
+##Formulation of dual produces results that concurr with primal solution
+
+#End
+
+

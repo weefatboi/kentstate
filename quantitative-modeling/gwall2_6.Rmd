@@ -1,0 +1,41 @@
+---
+title: "Assignment 6 - Transportation Problem"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+##Install and load in relevant packages
+
+```{r}
+library(lpSolve)
+library(lpSolveAPI)
+```
+
+#Formulate Problem
+
+```{r}
+trans.model <- make.lp(0,6)
+lp.control(trans.model, sense="min")
+set.objfn(trans.model, c(622,614,630,641,645,649)) 
+add.constraint(trans.model, c(1,1,1,0,0,0), "<=", 100)
+add.constraint(trans.model, c(0,0,0,1,1,1), "<=", 120)
+add.constraint(trans.model, c(1,0,0,1,0,0), "=", 80)
+add.constraint(trans.model, c(0,1,0,0,1,0), "=", 60)
+add.constraint(trans.model, c(0,0,1,0,0,1), "=", 70)
+```
+
+#Solve Problem
+
+```{r}
+solve(trans.model)
+```
+
+Success!
+
+#Display OBJFN values
+
+```{r}
+get.variables(trans.model)
+```
+
+Given the output above, the optimal transportation solution (one that minimizes both shipping and prdouction costs while satisfying the full demand of each warehouse) is 80 units produced from Plant B shipped to Warehouse 1, 60 units produced from Plant A shipped to Warehouse 2, and a combination of 40 units produced from Plant A and 30 units produced from Plant B shipped to Warehouse 3. All three Warehouse monthly demands are met, and both Plants stay within their monthly capacity. This optimal transportation configuration results in a minimized total cost of **$132790**.
