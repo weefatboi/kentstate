@@ -1,0 +1,408 @@
+---
+title: "IMDB Model"
+author: "Gordon Wall gwall2"
+output: html_notebook
+---
+
+##Importing Data
+```{r}
+#library(keras)
+
+imdb <- dataset_imdb(num_words = 10000)
+c(c(train_data, train_labels), c(test_data, test_labels)) %<-% imdb
+```
+
+##Prepping Data
+```{r}
+vectorize_sequences <- function(sequences, dimension = 10000) {
+  # Create an all-zero matrix of shape (len(sequences), dimension)
+  results <- matrix(0, nrow = length(sequences), ncol = dimension)
+  for (i in 1:length(sequences))
+    # Sets specific indices of results[i] to 1s
+    results[i, sequences[[i]]] <- 1
+  results
+}
+# Our vectorized training data
+x_train <- vectorize_sequences(train_data)
+# Our vectorized test data
+x_test <- vectorize_sequences(test_data)
+```
+
+```{r}
+# Our vectorized labels
+y_train <- as.numeric(train_labels)
+y_test <- as.numeric(test_labels)
+```
+
+##Building Model
+```{r}
+model <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "relu", input_shape = c(10000)) %>% 
+  layer_dense(units = 16, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+##Compile
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+) 
+```
+
+##Validating
+```{r}
+val_indices <- 1:10000
+
+x_val <- x_train[val_indices,]
+partial_x_train <- x_train[-val_indices,]
+
+y_val <- y_train[val_indices]
+partial_y_train <- y_train[-val_indices]
+```
+
+```{r, echo=TRUE, results='hide'}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_baseline <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+
+```{r}
+results_2layer <- model %>% evaluate(x_val, y_val)
+results_2layer
+```
+
+##Edit Epochs and Re-Run on Test
+```{r}
+model <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "relu", input_shape = c(10000)) %>% 
+  layer_dense(units = 16, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+model %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results <- model %>% evaluate(x_test, y_test)
+```
+
+```{r}
+results
+```
+
+##Predict
+```{r}
+model %>% predict(x_test[1:10,])
+```
+
+##Re-Try with 1 LAYER
+```{r}
+model_1layer <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "relu", input_shape = c(10000)) %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_1layer %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_1 <- model_1layer %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 4,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+
+## Val Results
+```{r}
+results_1layer <- model_1layer %>% evaluate(x_val, y_val)
+results_1layer
+```
+
+## Test Results
+```{r}
+model_1layer %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_1Ltest <- model_1layer %>% evaluate(x_test, y_test)
+results_1Ltest
+```
+
+##Re-Try with 3 LAYERS
+```{r}
+model_3layer <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "relu", input_shape = c(10000)) %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_3layer %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_3 <- model_3layer %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 4,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+
+## Val Results
+```{r}
+results_3layer <- model_3layer %>% evaluate(x_val, y_val)
+results_3layer
+```
+
+## Test Results
+```{r}
+model_3layer %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_3Ltest <- model_3layer %>% evaluate(x_test, y_test)
+results_3Ltest
+```
+
+##Building Model with 32 UNITS
+```{r}
+model_32units <- keras_model_sequential() %>% 
+  layer_dense(units = 32, activation = "relu", input_shape = c(10000)) %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_32units %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_32 <- model_32units %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 4,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+
+## Val Results
+```{r}
+results_32units <- model_32units %>% evaluate(x_val, y_val)
+results_32units
+```
+
+## Test Results
+```{r}
+model_32units %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_32test <- model_32units %>% evaluate(x_test, y_test)
+results_32test
+```
+
+##Building Model with 64 UNITS
+```{r}
+model_64units <- keras_model_sequential() %>% 
+  layer_dense(units = 64, activation = "relu", input_shape = c(10000)) %>% 
+  layer_dense(units = 64, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_64units %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_64 <- model_64units %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 4,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+
+## Val Results
+```{r}
+results_64units <- model_64units %>% evaluate(x_val, y_val)
+results_64units
+```
+
+## Test Results
+```{r}
+model_64units %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_64test <- model_64units %>% evaluate(x_test, y_test)
+results_64test
+```
+
+##Build Model Compile with MSE
+```{r}
+model_mse <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "relu", input_shape = c(10000)) %>% 
+  layer_dense(units = 16, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_mse %>% compile(
+  optimizer = "rmsprop",
+  loss = "mean_squared_error",
+  metrics = c("accuracy")
+)
+
+history_mse <- model_mse %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 4,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+## Val Results
+```{r}
+results_mse <- model_mse %>% evaluate(x_val, y_val)
+results_mse
+```
+
+## Test Results
+```{r}
+model_mse %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_msetest <- model_mse %>% evaluate(x_test, y_test)
+results_msetest
+```
+
+##Build Model with tanh
+```{r}
+model_tanh <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "tanh", input_shape = c(10000)) %>% 
+  layer_dense(units = 16, activation = "tanh") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_tanh %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_tanh <- model_tanh %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 4,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+## Val Results
+```{r}
+results_tanh <- model_tanh %>% evaluate(x_val, y_val)
+results_tanh
+```
+
+## Test Results
+```{r}
+model_tanh %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_tanhtest <- model_tanh %>% evaluate(x_test, y_test)
+results_tanhtest
+```
+
+##Build Model with DROPOUT
+```{r}
+model_dropout <- keras_model_sequential() %>% 
+  layer_dense(units = 16, activation = "relu", input_shape = c(10000)) %>%
+  layer_dropout(0.3) %>%
+  layer_dense(units = 16, activation = "relu") %>%
+  layer_dropout(0.2) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+```
+
+```{r, echo=TRUE, results='hide'}
+model_dropout %>% compile(
+  optimizer = "rmsprop",
+  loss = "binary_crossentropy",
+  metrics = c("accuracy")
+)
+
+history_dropout <- model_dropout %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_data = list(x_val, y_val)
+)
+```
+## Val Results
+```{r}
+results_dropout <- model_dropout %>% evaluate(x_val, y_val)
+results_dropout
+```
+
+## Test Results
+```{r}
+model_dropout %>% fit(x_train, y_train, epochs = 4, batch_size = 512)
+results_dropouttest <- model_dropout %>% evaluate(x_test, y_test)
+results_dropouttest
+```
+
+##Plot
+```{r}
+#library(ggplot2)
+```
+
+```{r}
+#library(dplyr)
+#library(tidyr)
+#library(tibble)
+```
+
+```{r}
+compare_cx <- data.frame(
+  baseline_train = history_baseline$metrics$loss,
+  baseline_val = history_baseline$metrics$val_loss,
+  dropout_train = history_dropout$metrics$loss,
+  dropout_val = history_dropout$metrics$val_loss
+) %>%
+  rownames_to_column() %>%
+  mutate(rowname = as.integer(rowname)) %>%
+  gather(key = "type", value = "value", -rowname)
+  
+ggplot(compare_cx, aes(x = rowname, y = value, color = type)) +
+  geom_line() +
+  theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank()) +
+  xlab("epoch") +
+  ylab("loss")
+```
+
+
+
+
+
+
+
