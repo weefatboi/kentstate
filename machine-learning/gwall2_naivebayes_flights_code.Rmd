@@ -1,0 +1,114 @@
+---
+title: "NB: Predicting Delayed Flights"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Load relevant libraries
+```{r}
+library(caret)
+library(dplyr)
+library(e1071)
+library(ggplot2)
+library(gmodels)
+library(pROC)
+library(plyr)
+```
+
+##Import and read data file
+```{r}
+FlightDelays = read.csv("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/MACHINE LEARNING 64060/Module 5/FlightDelays.csv")
+```
+
+##Summary of data
+```{r}
+summary(FlightDelays)
+```
+
+##Establish new, more effective time variable (Actual Departure - Scheduled Departure) and add to df
+```{r}
+flights.df = mutate(FlightDelays, Delay_Time = DEP_TIME - CRS_DEP_TIME)
+```
+
+The problem stipulates that flights which arrive greater than 15 minutes late are considered delayed, and all flight arrivals less than or equal to 15 minutes late are still considered ontime. Further examination of the data shows that some observations are incorrectly classified (i.e. delay of 19 minutes, yet still considered ontime), so we must correctly classify these before training with these data.
+
+##Re-classification of incorrect flight.status values
+```{r}
+flights.df = mutate(flights.df, Flight.Status = ifelse(Delay_Time <= 15, 'ontime', 'delayed'))
+```
+
+##Re-classification of flight.status values to 1=delayed and 0=ontime
+```{r}
+flights.df = mutate(flights.df, Flight.Status = ifelse(Flight.Status == 'delayed', 1, 0))
+```
+
+##Remove unwanted variables
+```{r}
+flights.df = flights.df[,-c(1,3,5,7,11)]
+```
+Distance, Flight Number, and Day of the Month are all both non-categorical AND redundant for this model. We are using distinct airplane tail number for plane classification (which will also be tied to the flight number), day of the week (day of month is redundant here), and distance won't matter in the context of three origin airports routing to three destination airports (known distances). We are left with **8 features** in feature selection, and 1 predicted variable (flight.status). Finally, both scheduled and actual departure time variables are no longer needed since we can now model based on delay time.
+
+##Recode time and week variables to factors
+```{r}
+flights.df$DAY_WEEK = as.factor(flights.df$DAY_WEEK)
+flights.df$Delay_Time = as.factor(flights.df$Delay_Time)
+flights.df$Weather = as.factor(flights.df$Weather)
+flights.df$Flight.Status = as.factor(flights.df$Flight.Status)
+str(flights.df)
+```
+All necessary variables are now class = factor and there exist no N/A values in our observations, so we can now split the data into training and validation sets.
+
+##Split data (60 train / 40 validation)
+```{r}
+set.seed(100)
+Index_Train = createDataPartition(flights.df$Flight.Status, p=0.6, list = FALSE)
+Train = flights.df[Index_Train,]
+Validation = flights.df[-Index_Train,]
+```
+
+##Build Naive Bayes model
+```{r}
+nb.model.flights = naiveBayes(Flight.Status ~ ., data = Train)
+```
+
+##Predict flight status of validation dataset
+```{r}
+test.predict.labels = predict(nb.model.flights, Validation)
+test.predict.labels.raw = predict(nb.model.flights, Validation, type = "raw")
+head(test.predict.labels.raw)
+```
+
+##Counts table
+```{r}
+table(flights.df$Flight.Status, flights.df$DEST)
+```
+Count of delayed/ontime flights arriving at each of the three destination airports.
+
+##Proportions table
+```{r}
+prop.table(table(flights.df$Flight.Status, flights.df$DEST))
+```
+Proportion (of total) of delayed/ontime flights arriving at each of the three destination airports.
+
+##ROC
+```{r}
+roc(Validation$Flight.Status, test.predict.labels.raw[,2])
+```
+AUC Value is **0.9796**, which is a very good sign that our model is performing as intended, encapsulating almost 98% of the data under the ROC Curve. Now, we can plot this.
+
+##ROC plot
+```{r}
+plot.roc(Validation$Flight.Status, test.predict.labels.raw[,2])
+```
+
+##Confusion Matrix
+```{r}
+CrossTable(x=Validation[,8], y=test.predict.labels, prop.chisq = FALSE)
+```
+There were a total of 60 missclassifications, per the results of our confusion matrix (53 FN and 7 FP). Our table shows an accuracy of (733+87)/880, or **0.9318**, which indicative of this model's potential to accurately classify new observations as delayed or ontime.
+
+###END

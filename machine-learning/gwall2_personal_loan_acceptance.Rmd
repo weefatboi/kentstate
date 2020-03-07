@@ -1,0 +1,156 @@
+---
+title: "Personal Loan Acceptance"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Load relevant libraries and datafiles
+```{r}
+# install.packages("class")
+# install.packages("gmodels")
+```
+```{r}
+library(caret)
+library(class)
+library(gmodels)
+```
+```{r}
+# install.packages("FNN")
+library(FNN)
+library(ggplot2)
+library(dplyr)
+```
+```{r}
+Universal_Bank <- read.csv("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/MACHINE LEARNING 64060/Module 4/UniversalBank.csv")
+```
+```{r}
+summary(Universal_Bank)
+```
+
+##Convert variable Education to dummy
+```{r}
+UBdf = mutate(Universal_Bank, Education_1 = ifelse(Education == 1, 1, 0))
+UBdf = mutate(UBdf, Education_2 = ifelse(Education == 2, 1, 0))
+UBdf = mutate(UBdf, Education_3 = ifelse(Education == 3, 1, 0))
+```
+##Drop irrelevancies (ID, zipcode, original education variable)
+```{r}
+UBdf.temp = UBdf[,-c(1,5,8)]
+```
+
+##Partition the data into training (60%) and validation (40%) sets
+```{r}
+set.seed(70)
+Train_Index_1 = createDataPartition(UBdf.temp$Personal.Loan, p=0.6, list=FALSE)
+Train.1 = UBdf.temp[Train_Index_1,]
+Validation.1 = UBdf.temp[-Train_Index_1,]
+```
+
+##Copy data
+```{r}
+train.norm.df = Train.1
+valid.norm.df = Validation.1
+```
+
+##Normalize training data
+```{r}
+norm.values = preProcess(Train.1[,1:6], method = c("center", "scale"))
+train.norm.df[,1:6] = predict(norm.values, Train.1[,1:6])
+valid.norm.df[,1:6] = predict(norm.values, Validation.1[,1:6])
+```
+
+##k-NN Classification
+```{r}
+nn1 = knn(train = train.norm.df[,-7], test = valid.norm.df[,-7], cl = train.norm.df[,7], k = 1, prob = TRUE )
+```
+
+##Output
+```{r}
+# print(nn1)
+```
+
+##Create and bind new test observation (given in question 1)
+```{r}
+customer1.df = rbind(valid.norm.df, c(40,10,84,2,2,0,0,0,0,1,1,0,1,0))
+```
+
+##Customer 1 Prediction
+```{r}
+prediction1 = knn(train = train.norm.df[,-7], test = customer1.df[2001,-7], cl = train.norm.df[,7], k = 1, prob = TRUE )
+row.names(Train.1)[attr(prediction1, "nn.index")]
+print(prediction1)
+```
+The output shows that our test customer's nearest neighbor is observation 663 in the original training data which, by a quick inspection, seems not all that close in similarity. This is may be due to the fact that our k=1 input is not the most accurate specification of k-neighbors to use for our model. In either case, we will figure out what the right k-value is next but, as of now, the model classifies this test customer as **1**, meaning **Will accept the personal loan.**
+
+##Optimal Choice of K
+```{r}
+accuracy.df = data.frame(k = seq(1, 14, 1), accuracy = rep(0, 14))
+```
+```{r}
+for(i in 1:14) {
+  knn.pred = knn(train = train.norm.df[,-7], test = valid.norm.df[,-7], cl = train.norm.df[,7], k = i)
+  
+  accuracy.df[i, 2] = confusionMatrix(knn.pred, as.factor(valid.norm.df[, 7]))$overall[1]
+}
+accuracy.df
+```
+It appears that, in fact, k=1 is the most accurate k-value for our model. K=3 has an equal accuracy, so either input would suffice. However, k=1 may be too small as far as modeling too much noise goes, so k=3 may be a smarter choice for the model, which takes in several neighbors as opposed to just one.
+
+```{r}
+pred.new.df = knn(train = train.norm.df[,-7], test = valid.norm.df[,-7], cl = train.norm.df[,7], k = 3, prob = TRUE )
+CrossTable(x= valid.norm.df[,7], y = pred.new.df, prop.chisq = FALSE)
+```
+The print out of the confusion matrix shows a total of 72 misclassifications (69 FN, 3 FP), out of 2000 observations. That's not too bad for a result, which shows that k=3 was a good choice. However, due to the make up of these misclassification in a real-world setting, the fact that there are a disproportionate amount of false negatives is not a good thing. It would be better to solicit false positives for personal loan acceptance and be turned down, than to miss out on soliciting false negatives who would've most likely accepted a personal loan if urged to. Thus, the model is decent enough, but not perfect. (some of that may have to do with the fact that this is my first crack at knn modeling xD)
+
+##Classify customer 1 using best k-value
+```{r}
+prediction2 = knn(train = train.norm.df[,-7], test = customer1.df[2001,-7], cl = train.norm.df[,7], k = 3, prob = TRUE )
+row.names(Train.1)[attr(prediction2, "nn.index")]
+print(prediction1)
+```
+It appears the customer is still classified as accepting a personal loan, but we can be more confident about this report using a k-value of 3 this time around.
+
+##Repartition data (50, 30, 20)
+```{r}
+set.seed(70)
+Test_Index_2 = createDataPartition(UBdf.temp$Personal.Loan, p=0.2, list=FALSE)
+Test.2 = UBdf.temp[Test_Index_2,]
+TraVal.2 = UBdf.temp[-Test_Index_2,]
+
+Train_Index_2 = createDataPartition(TraVal.2$Personal.Loan, p=0.625, list=FALSE)
+Train.2 = TraVal.2[Train_Index_2,]
+Validation.2 = TraVal.2[-Train_Index_2,]
+```
+
+##Apply k-NN to data
+```{r}
+new.train.norm.df = Train.2
+new.valid.norm.df = Validation.2
+new.test.norm.df = Test.2
+
+norm.values = preProcess(Train.2[,1:6], method = c("center", "scale"))
+new.train.norm.df[,1:6] = predict(norm.values, Train.2[,1:6])
+new.valid.norm.df[,1:6] = predict(norm.values, Validation.2[,1:6])
+new.test.norm.df[,1:6] = predict(norm.values, Test.2[,1:6])
+
+nn2 = knn(train = new.train.norm.df[,-7], test = new.valid.norm.df[,-7], cl = new.train.norm.df[,7], k = 3, prob = TRUE)
+
+nn3 = knn(train = new.train.norm.df[,-7], test = new.test.norm.df[,-7], cl = new.train.norm.df[,7], k = 3, prob = TRUE)
+```
+
+##Confusion Matrix Comparison
+```{r}
+CrossTable(x= new.valid.norm.df[,7], y = nn2, prop.chisq = FALSE)
+```
+```{r}
+CrossTable(x= new.test.norm.df[,7], y = nn3, prop.chisq = FALSE)
+```
+The two confusion matrices seem to be very similar in terms of recall and precision. They both have missclassified a similar amount of observations as well, reflecting this comparison. This (hopefully) means that our model does a good job at describing the new test data, as was our goal.
+
+//NOTE: could you provide any insight into what I might've missed during this assignment? I have this feeling in my gut like I've skipped over something important that is causing behind-the-scenes issue in my model. Because I was traveling during this assignment I want to make sure I double back on any key issues I might've missed when you all went over this assigment, so I can improve in my future career. Thanks, and Best.//
+
+###END

@@ -1,0 +1,303 @@
+---
+title: "Segmenting Consumers of Bath Soap"
+author: "Gordon Wall (gwall2)"
+date: "12/1/2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workspace Set-up
+```{r}
+# install.packages("factoextra")
+# install.packages("flexclust")
+library(tidyverse)
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(factoextra)
+library(flexclust)
+```
+
+## PROBLEM:
+CRISA has traditionally segmented markets on the basis of purchaser demographics. They would now like to
+segment the market based on two key sets of variables more directly related to the purchase process and to
+brand loyalty:
+1. Purchase behavior (volume, frequency, susceptibility to discounts, and brand loyalty)
+2. Basis of purchase (price, selling proposition)
+Doing so would allow CRISA to gain information about what demographic attributes are associated with
+different purchase behaviors and degrees of brand loyalty, and thus deploy promotion budgets more
+effectively. More effective market segmentation would enable CRISA’s clients (in this case, a firm called IMRB)
+to design more cost-effective promotions targeted at appropriate segments. Thus, multiple promotions could be
+launched, each targeted at different market segments at different times of the year. This would result in a more
+cost-effective allocation of the promotion budget to different market segments. It would also enable IMRB to
+design more effective customer reward systems and thereby increase brand loyalty.
+
+## DATA READING
+```{r}
+## read bath soap consumer data
+ bath.soap = read.csv("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/MACHINE LEARNING 64060/Module 6/BathSoap.csv")
+
+## inspect data
+ summary(bath.soap)
+```
+
+## PURCHASE BEHAVIOR CLUSTERING
+# DATA PRE-PROCESSING
+```{r}
+## variable creation
+bath.soap$Br..Cd..57..144 = as.numeric(bath.soap$Br..Cd..57..144)/100
+bath.soap$Br..Cd..55 = as.numeric(bath.soap$Br..Cd..55)/100
+bath.soap$Br..Cd..272 = as.numeric(bath.soap$Br..Cd..272)/100
+bath.soap$Br..Cd..286 = as.numeric(bath.soap$Br..Cd..286)/100
+bath.soap$Br..Cd..24 = as.numeric(bath.soap$Br..Cd..24)/100
+bath.soap$Br..Cd..481 = as.numeric(bath.soap$Br..Cd..481)/100
+bath.soap$Br..Cd..352 = as.numeric(bath.soap$Br..Cd..352)/100
+bath.soap$Br..Cd..5 = as.numeric(bath.soap$Br..Cd..5)/100
+bath.soap$Others.999 = as.numeric(bath.soap$Others.999)/100
+bath.soap$No..of.Brands = as.numeric(bath.soap$No..of.Brands)
+bath.soap$Brand.Runs = as.numeric(bath.soap$Brand.Runs)
+bath.soap$Total.Volume = as.numeric(bath.soap$Total.Volume)
+bath.soap$No..of..Trans = as.numeric(bath.soap$No..of..Trans)
+bath.soap = mutate(bath.soap, max.brand.loyal = apply(bath.soap[,23:30], 1, max))
+bath.soap = mutate(bath.soap, vol.br = Trans...Brand.Runs * Vol.Tran)
+str(bath.soap)
+
+## variable selection
+bs.behavior = bath.soap[,c(12:16, 19, 31, 47:48)]
+```
+Variables selected were based on the parameters CRISA set for what's determined as "Purchase Behavior" (volume, frequency, and brand loyalty). **Volume** is covered 4 variables; Total.Volume, Value, Avg..Price, and a derived variable for AVG Volume per Brand Run, or vol.br (Avg Trans/Brand Run * Avg Vol/Trans). **Frequency** is covered by 2 variables; Brand.Runs and No..of..Trans. Most importantly, **Brand Loyalty** is covered by 3 variables; No..of.Brands, Others.999, and a derived variable for Maximum Brand Loyalty, or max.brand.loyalty (the max value for each household across all major brand categories). Considering Note 2 of the assignment, loyalty in this case is in a general sense. As stated, a consumer who buys all Brand A is equivalent in loyalty to a consumer who buys all Brand B; the scope of this problem is for general use and not to determine the loyalty of consumers to any one, specific brand. Therefore, clustering with the presence of a maximum brand loyalty variable and the Others variable will show each households affinity to any major brand, as well as their likelihood to buy across many, minor brands. If a future cluster is centered around high max values, this cluster will be considered loyal. If a cluster is centered around high other.999 values, this cluster will be considered unloyal. Finally, a cluster with a center around low values of No..of.Brands will also be considered more loyal. A total of 9 variables are selected for analysis; We are ready to process this dataset now.
+
+NOTE: Susceptibility to discounts was determined to be more fitting with the Basis of Purchase analysis and was moved accordingly. That way, clustering on purchase basis will be more robust and each clustering analysis will possess three factors to cluster on (Behavior: loyalty, vol, freq; Basis: price, sellprop, discount susc).
+
+# DATA PROCESSING
+```{r}
+## normalize data (z-score)
+scaled.behavior = scale(bs.behavior)
+# summary(scaled.behavior)
+
+## view distance between observations
+# distance.behavior = get_dist(scaled.behavior)
+# fviz_dist(distance.behavior)
+```
+
+# OPTIMAL CLUSTERS
+Clusters will be important to the effectiveness of this study. CRISA has stated that they would implement anywhere between 2-5 marketing approaches when the study is complete, targeting consumers by both purchase behavior AND basis. The value of K should be chosen within those parameters and, thus, a maximum of 5 target groups will result from our final analysis. What this means is that each clustering analysis by either Behavior OR Basis should only possess a partial value of our total maximum clusters (5). We will consider K < 5 for each separate analysis before implementing the total in our final, combined analysis. 
+
+```{r}
+## optimal clusters
+fviz_nbclust(scaled.behavior, kmeans, method = "wss")
+fviz_nbclust(scaled.behavior, kmeans, method = "silhouette")
+```
+Elbow method reveals that an optimal number of clusters for the demographic data subset could be either **k = 2 or 3**. Silhouetting confirmation suggests that the optimal number of clusters is **k = 3**, but could also permit **k = 2** if needed. These results are congruent with K < 5 and, with that said, proceeding with 3 clusters for analysis seems reasonable.
+
+# DATA CLUSTERING
+```{r}
+## clustering with 3 centroids
+k3.behavior = kmeans(scaled.behavior, centers = 3, nstart = 20)
+```
+
+# ANALYSIS & VISUALIZATION
+```{r}
+## analysis
+k3.behavior$centers
+k3.behavior$size
+
+##visualization
+fviz_cluster(k3.behavior, data = scaled.behavior)
+```
+Cluster 1 (43 obsv) is very loyal, indicated by high max.brand.loyalty, low others.999, and low no.of.brands values. While not frequent purchasers, they buy high volume with high value. Cluster 2 (312 obsv) is a middle-ground cluster. Their loyalty is ambiguous, with low volume and low value (this would be a hard segment to market to and, perhaps 2 clusters would be more encompassing of the data. Will re-visit later). Cluster 3 (245 obsv) is considerably unloyal and likes to shop around. They have mid-range volume and value.
+
+Cluster 1 & 3 both prove promising in light of purchase behavior. Cluster 1 could be useful to major brands who want to secure and maintain their market share by catering to loyal consumers who by in high volume. Cluster 3 could be useful to newer, minor brands looking to take over market share from consumers who buy/spend much but aren't loyal to one brand (yet).
+
+Graphing shows somewhat strong clustering, with only a small amount of overlap and dense populations around each of the three centroids.
+
+## PURCHASE BASIS CLUSTERING
+# DATA PRE-PROCESSING
+```{r}
+## variable selection
+bath.soap$PropCat.5 = as.numeric(bath.soap$PropCat.5)/100
+bath.soap$PropCat.6 = as.numeric(bath.soap$PropCat.6)/100
+bath.soap$PropCat.7 = as.numeric(bath.soap$PropCat.7)/100
+bath.soap$PropCat.8 = as.numeric(bath.soap$PropCat.8)/100
+bath.soap$PropCat.9 = as.numeric(bath.soap$PropCat.9)/100
+bath.soap$PropCat.10 = as.numeric(bath.soap$PropCat.10)/100
+bath.soap$PropCat.11 = as.numeric(bath.soap$PropCat.11)/100
+bath.soap$PropCat.12 = as.numeric(bath.soap$PropCat.12)/100
+bath.soap$PropCat.13 = as.numeric(bath.soap$PropCat.13)/100
+bath.soap$PropCat.14 = as.numeric(bath.soap$PropCat.14)/100
+bath.soap$PropCat.15 = as.numeric(bath.soap$PropCat.15)/100
+
+bath.soap$Pr.Cat.1 = as.numeric(bath.soap$Pr.Cat.1)/100
+bath.soap$Pr.Cat.2 = as.numeric(bath.soap$Pr.Cat.2)/100
+bath.soap$Pr.Cat.3 = as.numeric(bath.soap$Pr.Cat.3)/100
+bath.soap$Pr.Cat.4 = as.numeric(bath.soap$Pr.Cat.4)/100
+bath.soap$Pur.Vol.No.Promo.... = as.numeric(bath.soap$Pur.Vol.No.Promo....)/100
+bath.soap$Pur.Vol.Other.Promo.. = as.numeric(bath.soap$Pur.Vol.Other.Promo..)/100
+bath.soap$Pur.Vol.Promo.6.. = as.numeric(bath.soap$Pur.Vol.Promo.6..)/100
+# str(bath.soap)
+colMeans(bath.soap[,c(36:46)])
+
+bs.basis = bath.soap[,c(20:22, 32:36)]
+```
+Variables selected were based on the parameters CRISA set for what's determined as "Purchase Basis" (price, discount susceptibility, and selling proposition). **Price** is covered by 4 variables; every price catergory variable (Pr.Cat. 1-4). **Discount Suscetibility** is covered by 3 variables; all promotion catergory variables (pur.vol.no.promo, pur.vol.promo.6, and pur.vol.promo.other). **Selling Proposition** will be represented by a make-up of proposition category variables, however, there are 10 of these and not all of them are significant as some were very under-utilized by the consumer base. With an output of the variable means, we can see that Proposition Category 5 (prop.cat.5) has an overwhelming amount of purchase volume connected to it (avg: ~47%). We will use this variable in analysis. Price categories will represent which households are willing to purchase from each pricing level, actively showing us which consumer can pay for what. Promotion categories will represent which households bought high volumes of product under either promotion 6, no promotion, or all other promotions, actively showing which consumers only buy with promotion and which do not. And, finally, Selling Proposition categories will represent which consumers bought high volumes of product under the top 2 propositions. To remain consistent with using about 9 variables in analysis like we did for Purchase Behavior, a total of 8 variables are selected for analysis; We are ready to process this dataset now.
+
+# DATA PROCESSING
+```{r}
+## normalize data (z-score)
+scaled.basis = scale(bs.basis)
+# summary(scaled.basis)
+
+## view distance between observations
+# distance.basis = get_dist(scaled.basis)
+# fviz_dist(distance.basis)
+```
+
+# OPTIMAL CLUSTERS
+Again, we will consider k < 5 to fit within the parameters of our overall goal of 2-5 marketing approaches.
+
+```{r}
+## optimal clusters
+fviz_nbclust(scaled.basis, kmeans, method = "wss")
+fviz_nbclust(scaled.basis, kmeans, method = "silhouette")
+```
+The Elbow method from minimizing the total WSS indicates that an optimal number of clusters could be **k = 2**. Silhouetting further indicates this with the highest width spiking above **k = 2** as well. We will proceed with 2 clusters for analysis.
+
+NOTE: Silhouetting indicates that 9 clusters is optimal, but this doesn't fit within our real-world parameters. CRISA has specified 2-5 total segments and 9 would be far too complicated to market to anyway (overlap, inefficient cost allocation).
+
+# DATA CLUSTERING
+```{r}
+## clustering with 2 centroids
+k2.basis = kmeans(scaled.basis, centers = 2, nstart = 20)
+```
+
+# ANALYSIS & VISUALIZATION
+```{r}
+## analysis
+k2.basis$centers
+k2.basis$size
+
+##visualization
+fviz_cluster(k2.basis, data = scaled.basis)
+```
+Cluster 1 (393 obsv) shows a higher susceptibility to discounts, yet also buys much without them. This is useful to know because cluster 1 will provide a strong base level of profit for a brand, but will respond positively and more frequently to discounts offered. Further, cluster 1 responds well to the various pricing categories with an emphasis on category 1. They also responded positively to selling proposition five, and will make an all-around easy segment to target with promotions and discounts. Cluster 2 (207 obsv) is logically the opposite. They do not respond well to discounts, nor promotions, and do not contribute to nearly as many purchases in the various pricing categories. This is good information to know so brands can tailor current products to the customers who don't buy as much, or potentially research new products to fit the demographics of cluster 2 so they become more frequent, willing, and susceptible buyers. 
+
+Graphing shows somewhat strong clustering, with virtually no overlap and dense populations near each of the two centroids.
+
+## PURCHASE BEHAVIOR AND BASIS CLUSTERING
+# DATA PRE-PROCESSING
+```{r}
+bs.bb = bath.soap[,c(12:16, 19:22, 31:36, 47:48)]
+```
+This is a combination dataframe of both the selected variables from behavior and basis analysis.
+
+# DATA PROCESSING
+```{r}
+## normalize data (z-score)
+scaled.bb = scale(bs.bb)
+# summary(scaled.bb)
+
+## view distance between observations
+# distance.bb = get_dist(scaled.bb)
+# fviz_dist(distance.bb)
+```
+
+# OPTIMAL CLUSTERS
+Again, we will consider k <= 5 to fit within the parameters of our overall goal of 2-5 marketing approaches. Now we can consider up to and including 5 clusters. Let's see what WSS and Silhouetting have to say.
+```{r}
+## optimal clusters
+fviz_nbclust(scaled.bb, kmeans, method = "wss")
+fviz_nbclust(scaled.bb, kmeans, method = "silhouette")
+```
+Both methods lean toward **k = 2** as a good cluster amount. However, with this many variables being considered, too few clusters might not capture some of the segmented differences we're looking for. Thus, we will try multiple configurations and determine the best.
+
+# DATA CLUSTERING
+```{r}
+## clustering with 2 centroids
+k2.bb = kmeans(scaled.bb, centers = 2, nstart = 20)
+
+## clustering with 3 centroids
+k3.bb = kmeans(scaled.bb, centers = 3, nstart = 20)
+
+## clustering with 4 centroids
+k4.bb = kmeans(scaled.bb, centers = 4, nstart = 20)
+
+## clustering with 5 centroids
+k5.bb = kmeans(scaled.bb, centers = 5, nstart = 20)
+```
+
+# ANALYSIS & VISUALIZATION
+```{r}
+## analysis of 2 clusters
+k2.bb$centers
+k2.bb$size
+
+##visualization
+fviz_cluster(k2.bb, data = scaled.bb)
+```
+```{r}
+## analysis of 3 clusters
+k3.bb$centers
+k3.bb$size
+
+##visualization
+fviz_cluster(k3.bb, data = scaled.bb)
+```
+
+```{r}
+## analysis of 4 clusters
+k4.bb$centers
+k4.bb$size
+
+##visualization
+fviz_cluster(k4.bb, data = scaled.bb)
+```
+
+```{r}
+## analysis of 5 clusters
+k5.bb$centers
+k5.bb$size
+
+##visualization
+fviz_cluster(k5.bb, data = scaled.bb)
+```
+
+## BEST SEGMENTATION
+It appears the best make-up, given the output of our 4 models, is **k = 3**. Graphing here shows 3 distinct clusters around 3 centroids, with little overlap. Further, the three clusters seem to be indicative of groups that are each targetable in their own way. Cluster 1 (107 obsv) is extremely loyal to their chosen brand, and low in susceptibility to promotion or discount. They represent a segment that will buy what they want no matter what, and won't change preference easily. This good for potential clients to learn about their base market share. Cluster 2 (210 obsv) is the opposite; they are very unloyal and responsive to promotion 6/others. Further, they represent a segment that is high in transaction volume and value, consistently switching up their preference in search of the best deal or newest product. They could make or break any given CRISA client if a portion of them was captured in the market by promoting new products well and offering ample discounts. Cluster 3 (283 obsv) is a middle of the road type cluster. They are neither too loyal or too unloyal, but their average transaction price is high and they demand a strong presence in pricing categories 1 & 2 and proposition category 5. They seem to be the careful shopper, not eager to switch preference too fast, but willing to pay top dollar for the right things. This could also be valuable to a CRISA client when determining who to make and market their higher-end products to under a carefully planned promotion. 
+
+# DEMOGRAPHICS
+```{r}
+## map cluster numbers to observations
+bs.clustered = cbind(bath.soap, Cluster =k3.bb$cluster)
+
+bs.democlust = aggregate(cbind(SEC, FEH, MT, SEX, AGE, EDU, HS, CHILD, CS, Affluence.Index) ~ Cluster, data = bs.clustered, mean, na.rm = FALSE)
+bs.democlust
+```
+Cluster 1 (107 obsv) seems to be comprised of lower socioeconomic class households with younger, less-educated homemakers and more average children. This makes sense given their high loyalty, low transaction volume, and lower presence in the price categories, as they have a lot of family-related bills to take care of and may not have the financial means to keep switching up their preference. They stick to what they know to be affordable and effective for their needs.
+
+Cluster 2 (210 obsv) seems to be comprised of high socioeconomic class households with highly educated homemakers. They also have the highest affluence index average, showing that this cluster contains people with a lot of valued possessions and spending potential. This is consistent with the results of the analysis, which show their high transaction volume and value, combined with their unloyalty and sampling of many brands. This cluster has money and likes to spend it with variable, newly-peaked interests. 
+
+Cluster 3 (283 obsv) seems to be comprised of the highest socioeconomic class households on average with high education and lower average age than cluster 2. They also possess decent affluence index. This cluster also has strong financial means supported by their analysis; they carry much weigh in pricing categories 1 & 2 and sport high-valued transactions. This customer is most likely a money-minded, successful mid-life man/woman who is conscious with their money, but will pay well for what they deem to be a quality product. 
+
+These results are necessary to determine the best segmentation of households. Because CRISA isn't working for any specific brand (they operate on general data analysis for this project to be used for any client), they can begin defining these consumer segments to sell to various clients based on those clients' individual goals. Does the client want to produce an affordable product that becomes the standard of the middle and lower class? The potential with marketing to Cluster 1 is staggering in this regard. They may not be as susceptible to promotion, but are highly loyal and could become impenetrable foundation of market share for a brand looking to control this market. Does the client want to appeal to affluent consumers with money to blow? Cluster 2 has low loyalty and high spending activity/power, making them a great target for the latest-and-greatest product on the market. Does the client have long-term branding goals? By making a high-quality and value-add product, they could easily target Cluster 3 which does their research and will buy in mass what they determine to be the best. They're also the largest cluster so the profit potential here is huge. Moving on to developing our classification model, we design this model to sort households into these three target segments with the most accuracy.
+
+## CLASSIFICATION MODEL
+```{r}
+## partition data
+set.seed(123)
+
+k3 = kcca(scaled.bb, k=3, kccaFamily("kmeans"))
+k3
+
+clusters_index.train = predict(k3)
+# clusters_index.test = predict(k3, newdata = bathsoap.test)
+
+image(k3)
+points(scaled.bb, col=clusters_index.train, pch=19, cex=0.3)
+# points(bathsoap.test, col=clusters_index.test, pch=22, bg="red")
+```
+Here we can see a similar sized clustering to what our kmeans function originally produced for behavior and basis variables with 3 clusters. Using kcca with prediction methods, the above code shows a model that could be used to predict classifications of new data into the three target segments previously discussed. In the commented-out code "bathsoap.test" would be new data that CRISA provides. They sampled 600 observations for this project but are in possession of data from the entire Indian market to utilize for test data. The commented-out code further shows our model predicting with the new data and then plotting the predicted observations with differently-sized and distinguishable points on the image of our original cluster to see where they match up to the training data clusters. Splitting our 600 observation into subsets for validation and test isn't as effective because kmeans clustering is unsupervised learning, and data partitioning is typically utilized in supervised learning. With new data present from CRISA, we could use nearest-neighbor classification on the centroids to predict what clusters the new data would belong to and section the Indian market into our 3 target segments for implementing marketing approaches.

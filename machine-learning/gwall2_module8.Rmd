@@ -1,0 +1,134 @@
+---
+title: "Customer Rating of Breakfast Cereals"
+author: "Gordon Wall (gwall2)"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Import and read csv file/relevant libraries
+
+```{r}
+library(tidyverse)
+library(factoextra)
+library(ISLR)
+library(dendextend)
+```
+```{r}
+library(cluster)
+library(stats)
+Cereals <- read.csv("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/MACHINE LEARNING 64060/Module 8/Cereals.csv")
+```
+
+##Data Preprocessing - remove missing values
+
+```{r}
+fx <- Cereals
+fx <- na.omit(fx)
+fx$mfr <- NULL
+fx$type <- NULL
+fx$name <- NULL
+head(fx)
+```
+3 observations (cereals) have been omitted (77 original; 74 remaining). 3 variables dropped (name, mfr, type) for numeric scaling.
+
+##Scale/standardize data
+
+```{r}
+fx <- scale(fx)
+head(fx)
+```
+
+##Question (A)
+#Hierarchical Clustering
+
+```{r}
+d <- dist(fx, method = "euclidean")
+hcl <- hclust(d, method = "complete")
+plot(hcl, cex = 0.6, hang = -1)
+```
+
+#AGNES
+
+```{r}
+hc_single <- agnes(fx, method = "single")
+hc_complete <- agnes(fx, method = "complete")
+hc_average <- agnes(fx, method = "average")
+hc_ward <- agnes(fx, method = "ward")
+print(hc_single$ac)
+print(hc_complete$ac)
+print(hc_average$ac)
+print(hc_ward$ac)
+```
+Best linkage is from the **Ward method** at **0.9046042**, which proves a strong clustering structure.
+
+#Plot AGNES based on Ward Method
+
+```{r}
+pltree(hc_ward, cex = 0.6, hang = -1, main = "Dendrogram of AGNES")
+```
+
+##Question (B)
+
+```{r}
+fviz_nbclust(fx, FUN = hcut, method = "wss")
+```
+The elbow method was used above to determine the optimal number of clusters. Meaning that clusters are added from cluster 1 to cluster n and when adding a new cluster doesn't significantly improve the total within sum of squares (wss) value, we've effectively found an optimal number of clusters. The dissimilarities grouped together after this optimal number would become far too great to show significant distinction between the remaining larger clusters. Here, the elbow seems to lie between 4 and 5 clusters. For analysis purposes and to answer this question, I would choose **5 clusters** to proceed with. 
+
+##Question (C)
+
+#Partition dataframe to A and B train/test parts (randomized)
+
+```{r}
+## 75% of the sample size
+smp_size <- floor(0.75 * nrow(fx))
+
+## reproducible seed
+set.seed(123)
+train_ind <- sample(seq_len(nrow(fx)), size = smp_size)
+
+train <- fx[train_ind, ]
+test <- fx[-train_ind, ]
+```
+
+#Partitions A vs. B optimal clusters
+
+```{r}
+fviz_nbclust(train, FUN = hcut, method = "wss")
+fviz_nbclust(test, FUN = hcut, method = "wss")
+```
+The wss analysis of randomized partitions A and B show that both show an optimal cluster number of **k=5**. The resulting dendrograms for A (train) and B (test) are below, with 5 clusters highlighted.
+
+#Partitions A vs. B dendrograms
+
+```{r}
+dA <- dist(train, method = "euclidean")
+hclA <- hclust(dA, method = "ward.D")
+plot(hclA, cex = 0.6, hang = -1)
+rect.hclust(hclA, k = 5, border = 1:5)
+```
+
+```{r}
+dB <- dist(test, method = "euclidean")
+hclB <- hclust(dB, method = "ward.D")
+plot(hclB, cex = 0.6, hang = -1)
+rect.hclust(hclB, k = 5, border = 1:5)
+```
+
+#Analyize correlation between the train and test data sets
+
+```{r}
+dendA <- as.dendrogram(hclA)
+dendB <- as.dendrogram(hclB)
+d_train_test <- dendlist(train = dendA, test = dendB)
+d_train_test %>% cor.dendlist(method = "cophenetic", use="complete.obs")
+```
+//NOTE: I've tried many things to attempt to make this section work. My thought process was to manipulate the train and test datasets as dendrograms, add them to a list, and then assess the correlation between those two sets to determine how effectively the train data matched with the clustering makeup of the test data. I was under the impression that datasets need not be the same length in observational rows, but only need to be equal in variable columns, which my both my train and test subsets are (13 columns, no NA values, differing amounts of observations). If this last section of code would run, the cophenetic correlation would show us just how similiar (or different) these two subsets managed to cluster their respective data. It's not like me to give up, but I'm just lost on how to make this code work. Any insight would be appreciated.//
+
+##Question (D)
+
+No, I don't believe the data should be normalized. First, the school has to determine what nutritional factors they consider to be "healthy." Once these are determined (i.e. high levels of vitamin C, low fat, etc), they can be begin formulating a cluster analysis to determine a cluster of "healthy" cereals. We would want to be able to see the dissimilarities between nutritional facts to determine which we considered part of the healthy group, and if the data were normalized we would lose the proportionalities that would help us determine these comparisons. Instead, the nutritional facts should all be converted to one, equal unit (like percentage of daily diet recommendation, etc) to begin describing how each fact contributes to the overrall "health" of each cereal. Once this preprocessing was done, we could cluster to see where the relationships grouped up to determine a cluster that encased most of the healthy cereals, and then put them in rotation so there was a unique one for every day of the week.
+
+##END
