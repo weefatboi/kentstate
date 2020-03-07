@@ -1,0 +1,125 @@
+---
+title: "Assignment 1"
+author: "Gordon Wall (gwall2)"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Import and read Online Retail dataset
+```{r}
+Online_Retail <- read.csv("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/BUSINESS ANALYTICS 64036/Module 4/Online_Retail.csv")
+```
+
+##Libraries
+```{r}
+library(dplyr)
+library(caret)
+```
+
+##Question 1
+```{r}
+Total_Transactions = unique(Online_Retail$InvoiceNo)
+Total = nlevels(Total_Transactions)
+Total
+```
+There are **25900** Total unique transactions in this dataset.
+
+#Transactions by Country (total number)
+```{r}
+TransTotal = Online_Retail %>% group_by(Country, InvoiceNo) %>% summarise(n = n()) %>% count(Country, sort = TRUE, name = "TransTotal")
+subset(TransTotal, TransTotal > 0.01*25900)
+```
+
+#Transactions by Country (percentage)
+```{r}
+TransTotalP = summarise(TransTotal, PercTotal = TransTotal/25900*100)
+subset(TransTotalP, PercTotal > 1)
+```
+
+##Question 2
+```{r}
+Online_Retail_New = Online_Retail %>% mutate(TransactionValue = Quantity*UnitPrice)
+```
+
+##Question 3
+```{r}
+SumTrans = aggregate(Online_Retail_New$TransactionValue, by = list(Country=Online_Retail_New$Country), FUN = sum)
+subset(SumTrans, x > 130000)
+```
+
+##Question 4
+#Bonus
+```{r}
+Temp=strptime(Online_Retail$InvoiceDate,format='%m/%d/%Y %H:%M',tz='GMT')
+Online_Retail$New_Invoice_Date <- as.Date(Temp)
+Online_Retail$Invoice_Day_Week= weekdays(Online_Retail$New_Invoice_Date)
+Online_Retail$New_Invoice_Hour = as.numeric(format(Temp, "%H"))
+Online_Retail$New_Invoice_Month = as.numeric(format(Temp, "%m"))
+```
+//NOTE: I tried several different attempts and methods to solve these, none of which worked sufficiently enough to turn in, but some of which were very close. Any explanation is appreciated!//
+
+##Question 5
+```{r}
+GermanyVal = Online_Retail_New %>% filter(TransactionValue, Country == "Germany")
+hist(GermanyVal$TransactionValue)
+```
+
+##Question 6
+```{r}
+Online_Retail_New %>% group_by(CustomerID, InvoiceNo) %>% summarise(n=n()) %>% count(CustomerID, sort = TRUE)
+```
+Excluding those CustomerID observations that have NA values, the highest number of transactions belongs to CustomerID **14911**.
+
+```{r}
+SumCust = aggregate(Online_Retail_New$TransactionValue, by = list(Customer=Online_Retail_New$CustomerID), FUN = sum)
+SumCust[which.max(SumCust$x),]
+```
+CustomerID **14646** is the most valuable, with total transaction expenditures amounting to **$279,489**.
+
+##Question 7
+```{r}
+colMeans(is.na(Online_Retail))
+```
+It appears the CustomerID variable is the only column possessing missing values, with an average of about 1 in 4 being N/A (~25%).
+
+##Question 8
+```{r}
+CountryNA = Online_Retail %>% group_by(Country, Missing = is.na(CustomerID)) %>% summarise(n = n())
+filter(CountryNA, Missing == "TRUE")
+```
+
+##Question 9
+#Bonus
+//NOTE: (same as note in question 4)//
+
+##Question 10
+```{r}
+French = Online_Retail_New %>% group_by(Country, InvoiceNo, Quantity)
+FrenchQuant = subset(French, Country == "France")
+FrenchNegative = subset(FrenchQuant, Quantity < 0)
+subset(FrenchNegative, !duplicated(InvoiceNo))
+```
+Output shows 69 unique transactions (69 observations) that were cancelled and returned. Previous analysis performed in question 1 reveals that France has participated in 461 unique total transactions. Therefore, the return rate of French customers is 69/461, or **0.149674**, meaning about **15%**.
+//NOTE: I'm aware I did this the long way with several stored intermediate variables. I couldn't make the piping method work absent error for this question. I arrived at the correct answer (I believe), but slowly, so any insight is appreciated.//
+
+##Question 11
+```{r}
+temprev = aggregate(Online_Retail_New$TransactionValue, by = list(Online_Retail_New$StockCode), FUN = sum, sort = TRUE)
+temprev[which.max(temprev$x),]
+```
+It appears that the stockcode **DOT** pertains to the item that generated the highest total revenue across all sales. If this is sufficient, question is answered. If description of item is needed, below is the filtered list of transactions by stockcode DOT, showing us the complete description of this item.
+```{r}
+filter(Online_Retail_New, StockCode == "DOT")
+```
+Stockcode DOT identifies the highest revenue item as **DOTCOM POSTAGE**.
+
+##Question 12
+```{r}
+Online_Retail %>% summarise(n_distinct(CustomerID))
+```
+There are **4373** unique customers in this dataset.

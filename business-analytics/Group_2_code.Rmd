@@ -1,0 +1,147 @@
+---
+title: "Group 2 Project Code"
+author: "Gordon Wall (gwall2)"
+date: "12/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Workspace Set-Up
+```{r}
+## data package install
+# install.packages('C50')
+
+## open libraries & import data
+ library(C50)
+ data(churn)
+ library(e1071)
+ library(dplyr)
+ library(caret)
+ library(ggplot2)
+ library(gmodels)
+ library(pROC)
+# install.packages('ROCR')
+ library(ROCR)
+```
+
+```{r}
+## change factor level order of churn variable
+# we specifiy directly to the model later that yes is the '1' outcome and so we hold off on changing the factor level orders here
+
+## examine data
+str(churnTrain)
+```
+Note: We haven't dropped churnTest dataset per the recommendation in the group project instructions. We will treat this dataset as a validation set to analyze/optimize the performance metrics of our model before doing our final prediction on Customers_To_Predict.
+
+### Model Formulation
+
+## Creating Baseline Model
+```{r}
+table(churnTrain$churn)
+table(churnTest$churn)
+```
+```{r}
+(2850+1443)/5000
+```
+Our baseline model produces an **accuracy of ~86%**, calculated by the number of kept customers (no churn = 0) over all the customer observations across the full dataset. The goal is to exceed this accuracy with the model we produce later on. NOTE: this is assuming that because no churn is more common that churn in our dataset, we theoretically predict on all customers not churning. With this assumption in place, the baseline model correctly predicts about 86% of observations to be nonchurners. 
+
+## Variable Selection (1)
+A preliminary discussion of what independent variables to use in prediction of the dependent (churn) is necessary. Reading through the list of 19 potential variables can allow for us to use logic and reason to initially examine a few we deem important. **Account_length** seems important; assumedly because a long-term customer is more likely satisfied with service and, thus, less willing to churn. **Number_customer_service_calls** also seems relevant; customers with a high volume in this category likely haven't had the best experience with solving their service-related problems and are more likely to churn. Further, customers with higher charges on their bill may be shopping around to find a better deal and more likely to churn. Finally, a look at what type of plan features the customer has (international? voicemail capable?) could be useful too. Let's proceed with the modeling to decided what variables are truly important, and see if any of our guesses become significant.
+
+```{r}
+## drop unwanted variables
+## state and area_code have an inhibiting amount of factor levels, we remove them
+churnTrain = churnTrain[,-c(1,3)]
+churnTest = churnTest[,-c(1,3)]
+
+## remove observations with missing values, if any
+na.omit(churnTrain)
+
+## model the training data
+log.model = glm(churn ~ ., data = churnTrain, family = binomial)
+summary(log.model)
+```
+The summary of our first logistic regression reveals some notable things. First is that total international charges, as well as night and day charges, have positive coefficient estimates, meaning their increasing value could be associated with higher churn like we originally thought. However, their p-values show they are insignificant in describing the model. Second is that we missed the mark on account length; it is shown that account length has an insignificant p-value and a neutral coefficient estimate, so we will drop this variable for further analysis. Third is that, like we thought, number of customer service calls is also positively related to churn, and the corresponding p-value is highly significant. We will keep this variable.
+
+Regarding the remaining variables, this is far too many variables to model with in this problem, but it's worth seeing the relationship between the predictors and the model. We will eliminate the ones that have unassuming coefficient estimates and/or insignificant p-values. Having at least one significance star here (*) will be a good guide.
+
+Finally, our first model's AIC value is high; this isn't ideal because this is similar to an R^2 value which we'd like to minimize if possible. Removing truly insignificant variables should do the trick. We are left with international_plan, voice_mail_plan, number_customer_service_calls, and total_intl_calls to form a second model with.
+
+```{r}
+## model churn by international_plan, voice_mail_plan, number_customer_service_calls,
+## total_intl_calls, and total_intl_charge
+log.model2 = glm(churn ~ international_plan + voice_mail_plan + number_customer_service_calls + total_intl_calls, data = churnTrain, family = binomial)
+summary(log.model2)
+```
+
+## Performance Metrics
+```{r}
+## 0.5 probability threshold
+log.pred = predict(log.model2, newdata = churnTest, type = "response")
+thresh = log.pred > 0.5
+summary(thresh)
+```
+Our model, at a 0.5 threshold, has predicted a combined total of 1609 TP and TN, and 58 FP and FN. This is a good initial metric. Let's look at the breakdown:
+
+```{r}
+## classification table breakdown @ 0.5
+log.table = table(churnTest$churn, thresh)
+log.table
+```
+The model outputted 32 false churners (not actually likely to churn) and was wrong in identifying 26 people who are likely to churn (labeled as nonchurners). All considering, missing 26 potential churners isn't too bad in a dataset with 1667 customers. That means at most, 26 peoples' business will be lost, and this is just the maximum out of 26 people who are likely to churn above a 0.5 threshold, but could still end up staying. Another 192 were correctly identified as potential churners and can be proactively marketed to so as to prevent it. Let's look at a confusion matrix for further stats:
+
+```{r}
+## confusion matrix
+churn.class = ifelse(churnTest$churn == "yes", 1, 0)
+pred.class = churn.class
+pred.class[log.pred <= 0.5] = 1 - pred.class[log.pred <= 0.5]
+log.matrix = table(churn.class, pred.class)
+confusionMatrix(log.matrix, positive = '1')
+```
+Our accuracy is **~97%**, which exceeds our baseline. This is the fraction of predicted values that are actually correct; a good start for our model, but not enough to say it's a quality model yet given the imbalance of the observations in our dependent data category. Our recall (sensitivity) is **~88%**, which identifies the fraction of positive cases that were correct, but more is still needed. Our precision is **~98%**, meaning the ability of our model to correctly define positive cases in this set (churn). Balancing specificity and sensitivity will be key for this model. Remember that we determined earlier it would be more detrimental not to capture high-likelihood churners (low TPR) than to misidentify unlikely churners as churners (lower TNR). Thus, based on our confusion matrix statistics, we may want to adjust the threshold to be slightly lower so we can be looser on identifying true positives (increase positive prediction value) and increase our TPR. This will be beneficial to ABC Wireless as they'll be enabled to contact more customers who could potentially churn, at the small expense of mistakenly contacting a few more who wouldn't have churned regardless of intervention.
+
+```{r}
+## 0.4 probability threshold (0.1 decrease)
+log.pred2 = predict(log.model2, newdata = churnTest, type = "response")
+thresh2 = log.pred2 > 0.4
+summary(thresh2)
+```
+
+```{r}
+## classification table breakdown @ 0.4
+log.table2 = table(churnTest$churn, thresh2)
+log.table2
+```
+
+```{r}
+## confusion matrix
+churn.class2 = ifelse(churnTest$churn == "yes", 1, 0)
+pred.class2 = churn.class2
+pred.class2[log.pred2 <= 0.4] = 1 - pred.class2[log.pred2 <= 0.4]
+log.matrix2 = table(churn.class2, pred.class2)
+confusionMatrix(log.matrix2, positive = '1')
+```
+There. Our model has a better positive prediction value and increased sensitivity, showing that the portion of our yes = churn classifications predicted correctly from this model/threshold are higher for the benefit of ABC Wireless. Finally, we confirm satisfaction with our model one last time using an ROC curve plot:
+
+```{r}
+## ROC curve prediction frame
+ROC.pred = prediction(log.pred2, churnTest$churn, label.ordering = c("yes", "no"))
+
+## ROC curve performance frame
+ROC.perf = performance(ROC.pred, "tpr", "fpr")
+
+## ROC curve plot
+plot(ROC.perf, colorize = TRUE, print.cutoffs.at = seq(0, 1, by = 0.1), text.adj = c(-0.2, 1.7))
+abline(a=0, b=1)
+```
+The area under the curve of this plot could be more, but this is a satisfactory curve such that we are confident enough to test our model on the new data, Customers_To_Predict, which has no known values for churn.
+
+## Predict Customers with Finished Model
+```{r}
+load("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/BUSINESS ANALYTICS 64036/Exam/Customers_To_Predict.RData")
+Churn_Prob = predict(log.model2, newdata = Custmers_to_predict, type = "response")
+```
+

@@ -1,0 +1,127 @@
+---
+title: "Assignment II - Regression Analysis"
+author: "Gordon Wall (gwall2)"
+date: "11/9/2019"
+output: word_document
+---
+## 1. Run provided code to create variable X and Y
+
+```{r}
+set.seed(2017)
+X=runif(100)*10
+Y=X*4+3.45
+Y=rnorm(100)*0.29*Y+Y
+```
+
+## 1(a) Plot X against Y
+
+```{r}
+plot(X,Y,xlab="X",ylab="Y")
+```
+
+The above plot of X against Y shows that yes, in fact, we can fit a linear regression model to explain the relationship between these two variables. The plotted data suggests that based on Y's consistent tendency to increase as X increases, some line of "best-fit" should sufficiently line up with, and give insight into, this data subset. The plotted data visually represents a vaguely linear shape, implying some base level of normality (should the residuals be distributed later).
+
+## 1(b) COnstruct a simple linear model of Y based on X, and write the explanation equation
+
+```{r}
+Model=lm(Y ~X)
+print(Model)
+summary(Model)$sigma  #standard error
+plot(Model$fitted.values, Model$residuals, xlab="Fitted Values", ylab="Residuals")
+```
+
+The outputted coefficients reveal that the explanation equation is **Y = 4.465 + 3.611X**.
+
+The initial data looked somewhat linearly shaped however, both the standard error of the model and the plot of residuals vs. fitted values clearly show that the model isn't ideally accurate. Typically, a low standard error and a random (pattern-less) dataplot of fitted and residual values are ideal in proving accuracy of the model. We may still be able to glean information from this model, but our current approach may not be the best given the above results.
+
+## 1(c) Coefficient of Determination (R^2) in relation to correlation coefficient of X and Y
+
+```{r}
+summary(Model)$r.squared  #coefficient of determination
+cor(X,Y)  #correlation coefficient
+```
+
+Shown above, the correlation coefficient is **0.807291**, meaning that the dataset is reasonably highly correlated (near a value of positive 1). The Coefficient of Determination relates to this value because it is the *square* of the value (0.807291^2), and allows us to determine the certainty of our predictions drawn from this model. 
+
+## 2. Load mtcars dataset
+
+```{r}
+mtcars
+```
+
+## 2(a) Create linear model for weight (wt) vs. horsepower (hp)
+
+```{r}
+wt_James=mtcars$wt
+hp_James=mtcars$hp
+Model_James=lm(hp_James ~wt_James)
+summary(Model_James)
+```
+
+## Create linear model for miles/gallon (mpg) vs. horsepower (hp)
+
+```{r}
+mpg_Chris=mtcars$mpg
+hp_Chris=mtcars$hp
+Model_Chris=lm(hp_Chris ~mpg_Chris)
+summary(Model_Chris)
+```
+
+It would appear from the results that Chris's theory, when modeled, is more accurate a predictor of horsepower given mpg, than James's theory of horsepower given weight. This can be concluded from the more favorable result of Chris's r-squared value (0.6024) and lower standard error (43.95). Even still, Chris's models results are, in themselves, not the most accurate either, yet they do a better job fitting the relationship between X and Y than does James's model.
+
+## 2(b) Build model to predict horsepower (hp) given number of cylinders (cyl) and miles/gallon (mpg)
+
+```{r}
+cyl_hpModel=mtcars$cyl
+mpg_hpModel=mtcars$mpg
+hp_hpModel=mtcars$hp
+hpModel=lm(hp_hpModel ~cyl_hpModel+mpg_hpModel)
+summary(hpModel)
+```
+
+Given the solved model, our line equation is **Y = 54.067 + 23.979X1(cyl) - 2.775X2(mpg)**.
+So, a car with 4 cylinders and 22 miles/gallon, the horsepower is estimated to be **88.933 hp**.
+
+## 3. Run provided code to load the dataset mlbench
+
+```{r}
+#install.packages('mlbench')
+library(mlbench)
+data(BostonHousing)
+```
+
+## 3(a) Build model to predict median value of owner-occupied homes (medv)
+
+```{r}
+X1_crim=BostonHousing$crim
+X2_zn=BostonHousing$zn
+X3_ptratio=BostonHousing$ptratio
+X4_chas=BostonHousing$chas
+Y_medv=BostonHousing$medv
+medvModel=lm(Y_medv ~X1_crim+X2_zn+X3_ptratio+X4_chas)
+summary(medvModel)
+```
+
+It appears that this model isn't as accurate as it could be, given the low R^2 values. Only ~36% of the data is described by these four variables. This is likely because one or more of the input variables is statistically insignificant, and needs to be removed to re-formulate this model and produce more accurate prediction capabilities. Or, it could be that we didn't capture enough of the data because we didn't pick the correct makeup of variables to use from our dataset BostonHousing.
+
+## 3(bI) What effect does bounding the Chas River produce on the house prices?
+
+The estimated coefficient in our model's results for the variable X4 pertaining to the Chas River is a positive number, meaning that it positively effects the Y output. Meaning, when houses are near the river the house prices increase, and the value of the estimated coefficient shows that a house by the Chas River would be roughly ~4.58 times more expensive than an identical house that wasn't bounded by the Chas River. (NOTE: this factor seems quite high for reality, but we must remember that the model itself isn't ideally accurate for prediction)
+
+## 3(BII)(BONUS) What effect does pupil-teacher ratio have on the house prices?
+
+The estimated coefficient in our model's results for the variable X3 pertaining to the pupil-teacher ratio is a negative number, meaning that as the ratio grows (more kids per teacher) the housing prices fall proportionally. So, the house with a 15 ptratio would be more expensive than one with an 18 ptratio. That exact value is the difference between them is: (-1.49367 times 15)-(-1.49367 times 18) = 4.481 times more expensive.
+
+## 3(c) Which of the variables are statistically important?
+
+Based on the p-values of our model's coefficients, it would seem that variable X4 (Chas River bounded) is the largest by far, and therefore the most insignificant when considering changes in the predictor versus changes in the response. However, when using the common 0.05 significance level, it would appear that all four variables' p-values are less than 0.05, meaning all four are significant (statistically important) enough to keep in the model. 
+
+## 3(d) Anova Analysis to determine importance order
+
+```{r}
+anova(medvModel)
+```
+
+Given the results of the Anova test, we can see the Sum Sq values in the table. Based on this, the order of importance for the modeled variables follows (from most to least): 1. Crime Zone 2. Pupil/Teacher Ratio 3. Zoning 4. Chas River Bounded
+
+### END

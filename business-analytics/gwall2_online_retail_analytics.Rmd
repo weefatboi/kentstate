@@ -1,0 +1,11 @@
+---
+title: "Online Retail Analytics"
+output: html_notebook
+---
+
+#import and read Online Retail dataset
+
+```{r}
+read.csv("C:/Users/Gordon/Dropbox/KSU MSBA Program/SEMESTER 4/BUSINESS ANALYTICS 64036/Module 4/Online_Retail.csv")
+```
+
