@@ -1,0 +1,46 @@
+---
+title: "NPPES Pre-Processing"
+author: "Gordon Wall (gwall2)"
+output: html_notebook
+---
+
+## Importing NPPES Dataset
+```{r}
+nppes <- read.csv("~/R Datasets/NPPES/npidata_pfile_20050523-20200112.csv", header=TRUE, stringsAsFactors = FALSE, nrows = 300000)
+## NOTE: strings are, by default, converted to factors with read.csv(). To keep text values as strings, we must specifiy this arguement as FALSE
+## NOTE2: file is ~7GB; a subset number of rows (300,000) were loaded to circumvent the load-in issues that R faces on a laptop with limited computing capabilites. We can still gain initial insight over the dataset by analyzing a subset during pre-process.
+```
+
+## Question 1: Are there any missing values? Total Percent?
+```{r}
+p_miss <- mean(is.na(nppes))
+p_miss*100
+```
+These two lines of code answer both questions above. YES, there are missing values; almost 20% of the data is, in fact, a missing value (actual: 18.94%). If there were no missing values, this output would return 0%.
+
+## Question 1 cont: Imputation?
+
+Many ways exist to impute (replace) missing values with relevant new values derived from the variable column they reside in. Several examples are imputing from the mean (replacing missing values with the mean of the column), imputing with median (same concept), and kNN imputation. The latter is the most widely accepted for situations like these.
+NOTE: imputing missing values for 20% of the data seems like a bad idea, as this is a significantly large portion of the dataset that would be essentially 'made up'. In practice, it'd be a more logical first step to revisit gathering real data to include in the dataset before imputation is deemed necessary. Secondly, because this dataset is so large, it is also a consideration to just omit missing values as opposed to imputing them because we already have sufficient data points to analyze and want to avoid introducing bias with the addition of 20% imputed values. Finally, imputation isn't always relevant depending on the type of data. It should only be used for numeric or categorical variables, an not for things like strings or factors that can't be imputed (i.e. if a client's address is missing). Further, just because a variable is numeric doesn't mean it should always be imputed. We face this issue in the dataset where, by example, many observations have things like 'phone number' or 'client ID' missing, things that would be illogical to impute. Most of the variables in this dataset are information-based and specific to the observation thus, I will abstain from imputing missing values.   
+
+## Question 2 & 3: Take a random sample of 100,000 records and analyze/compare the sample columns to original.
+```{r}
+set.seed(62695) # set random seed
+i <- sample(1:nrow(nppes), 100000, replace = FALSE) # random sample without replacement
+nppes_sample <-  nppes[i,] # create random sample of 100000
+orig <- summary(nppes)
+new <- summary(nppes_sample)
+compare <- rbind(orig, new)
+compare
+```
+The summary details and structure appear to be the same for both the original dataset and the random sample. This is good news for pre-analysis.
+
+## Question 4: Are there Duplicates? If so, how to delete them?
+```{r}
+summary(duplicated((nppes)))
+```
+The output shows that all 300,000 records appear as FALSE when analyzed for duplicate records, meaning that none are present. If any were present, we could delete them by creating an index subset of the original dataset, with only extracted duplicate values present, and then create a new dataset as the OPPOSITE of the duplicate subset (data[!duplicates]) to finish with a dataset free of duplicate observations.
+
+
+
+
