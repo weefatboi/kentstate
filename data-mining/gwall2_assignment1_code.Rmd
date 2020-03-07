@@ -1,0 +1,107 @@
+---
+title: "R Notebook"
+author: "Gordon Wall (gwall2)"
+output:
+  word_document: default
+  pdf_document: default
+  html_notebook: default
+---
+
+# Workspace Set-up
+```{r}
+# install.packages('glmnet', repos='http://cran.us.r-project.org')
+```
+```{r}
+# install.packages('ISLR')
+```
+```{r}
+library(glmnet)
+library(ISLR)
+library(dplyr)
+```
+
+# Project Goals
+### Maximize Profit
+### Determine Optimal Price for stores with 'Good' Shelving Location
+### Determine Optimal Price for stores with 'Bad' Shelving Location
+### Plot Optimal Pricing for both Good/Bad across Range of $40-85 Production Cost per Unit
+
+# Known Information
+### Production Cost (C) = $55.00/unit
+
+# Data Pre-Processing
+```{r}
+safebabies <- Carseats %>% select("Sales", "Price", "ShelveLoc")
+```
+
+### Drop 'Medium' Location observations - not relevant to project
+```{r}
+safebabies <- subset(safebabies, !(safebabies$ShelveLoc == "Medium"))
+```
+
+### Split Data to Good and Bad Shelf Location sets
+```{r}
+sb_good <- subset(safebabies, safebabies$ShelveLoc == "Good")
+sb_bad <- subset(safebabies, safebabies$ShelveLoc == "Bad")
+sb_good <- sb_good[,1:2]
+sb_bad <- sb_bad[,1:2]
+```
+
+# Modeling
+### Model for Good Location
+```{r}
+x1 <- sb_good[,2]
+y1 <- sb_good[,1]
+fit_good <- cv.glmnet(cbind(0,x1), y1, alpha = 0)
+fit_good$lambda.min
+coef(fit_good, s = "lambda.min")
+```
+### Answer 1A
+Using the b0 and b1 coefficients outputted above in our derived equation, for optimal price ends up being 169.20 dollars. Using this in the Total Profit equation, we gather sales of around 7.05 units (in thousands), secure a profit margin of 114.2 dollars and maximize profit at 805.11 (in thousands). 
+
+### Model for Bad Location
+```{r}
+x2 <- sb_bad[,2]
+y2 <- sb_bad[,1]
+fit_bad <- cv.glmnet(cbind(0,x2), y2, alpha = 0)
+fit_bad$lambda.min
+coef(fit_bad, s = "lambda.min")
+```
+### Answer 1B
+Using the b0 and b1 coefficients outputted above in our derived equation, for optimal price ends up being 137.43 dollars. Using this in the Total Profit equation, we gather sales of around 4.31 units (in thousands), secure a profit margin of 82.43 dollars and maximize profit at 355.27 (in thousands).  
+
+### Further Insights
+The results clearly show a difference between stocking carseats at stores with good shelving location (high visibility) versus ones with bad shelving location (low visibility). The difference in total profit between good shelving vs. bad is around 449.84 thousand dollars! It pays to stock carseats in the highest possible visibility, which in turn increases the optimal price to be charged and increases unit sales as well.
+
+# Plotting
+```{r}
+prodcosts <- c(40:85)
+
+p_good <- 0.5*prodcosts + 141.72
+goodfx <- cbind(prodcosts, p_good)
+
+p_bad <- 0.5*prodcosts + 109.94
+badfx <- cbind(prodcosts, p_bad)
+```
+```{r}
+library(ggplot2)
+goodfx <- data.frame(goodfx)
+badfx <- data.frame(badfx)
+```
+```{r}
+plot = ggplot() +
+  geom_line(data = goodfx, aes(x = prodcosts, y = p_good), color = "blue") +
+  geom_line(data = badfx, aes(x = prodcosts, y = p_bad), color = "red") +
+  xlab("Production Costs") +
+  ylab("Optimal Price") +
+  ggtitle("Production Cost Effect on Optimal Price")
+
+print(plot)
+```
+### Answer 2
+We can see from the plot the effect that production cost has on the optimal price within the range of 40-85 dollars in production costs. The line for good shelving location (in blue) is relevantly above the line for bad shelving (red) given the increased optimal price and profit margin for carseats with high visibility.
+
+
+
+
+
