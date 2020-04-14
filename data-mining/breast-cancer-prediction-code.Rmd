@@ -1,0 +1,170 @@
+---
+title: "Assignment 2 - Random Forest"
+author: "Gordon Wall (gwall2)"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+
+# Load Relevant Libraries
+```{r, echo=TRUE, results="hide", message=FALSE, error=FALSE}
+library(data.table)
+library(dplyr)
+library(bit64)
+library(caret)
+library(mlbench)
+library(skimr)
+library(readr)
+```
+
+# Load Relevant Data
+```{r}
+data("BreastCancer")
+```
+
+# Examine and Tame Data
+
+## Levels
+```{r}
+levels(BreastCancer$Class)
+```
+
+## Skim for variable statistics by type  
+```{r}
+skim(BreastCancer)
+```
+#### all the numeric data is classified as a factor
+#### by default in this dataset
+#### We will change variables 2:10 to numeric before
+#### use in the model
+
+## Tidy Data and Re-check
+```{r}
+BreastCancer[,2:10] <- sapply(BreastCancer[,2:10], as.numeric)
+skim(BreastCancer)
+```
+
+#### All relevant numeric variables have been changed to numeric
+
+#### There are 699 observations but only 645 unique values from the Id variable
+#### per the n_unique output of our skim statistics
+#### Upon further inspection, the duplicated Id values are not redundant rows;
+#### the Id values may be the same, but the other row information is unique
+#### thus, they will be kept and Id variable will be dropped as it is negligible in
+#### this scenario
+
+#### (had they been completely duplicated rows, we would consider removing them
+#### as long as they could be determined not to be unique data points that 
+#### coincidentally had the same values in each variable; not likely for 16 rows)
+
+## Removal of ID column
+```{r}
+bc <- BreastCancer[,-1]
+skim(bc)
+```
+#### Our data looks much nicer now
+#### Bare.nuclei variable still needs to be addressed
+#### as it's the only one with 16 missing entries
+
+## Examine distinct values of Bare.nuclei
+```{r}
+bc %>% distinct(Bare.nuclei)
+```
+#### per skimming the data, 16 values are missing from the Bare.nuclei variable
+#### based on judgement, there are not enough data points in this set to justify 
+#### removing rows (deleting 16/699 obsv is 2.3% of our data), so these NA values
+#### will be imputed with KNN instead
+
+# Imputing missing values with K-Nearest-Neighbors (KNN)
+```{r}
+library(VIM)
+
+bc.complete <- kNN(bc, variable = "Bare.nuclei", k = 5)
+skim(bc.complete)
+bc.complete <- bc.complete[,-11]
+
+bc.complete %>% distinct(Bare.nuclei)
+```
+
+# Build Training Model
+
+## Partition Dataset
+```{r}
+set.seed(626)
+
+train.index <- createDataPartition(y = bc.complete$Class, p = 0.7, list = FALSE)
+train <- bc.complete[train.index,]
+test <- bc.complete[-train.index,]
+```
+
+## Model training data
+```{r}
+library(randomForest)
+
+rf.model <- train(Class~., data = train, method = "rf")
+rf.model
+```
+
+## Re-model training data with required mtry values (c(2,6,8))
+```{r}
+grid.search <- expand.grid(.mtry=c(2,6,8))
+
+rf.model2 <- train(Class~., data = train, method = "rf", tuneGrid = grid.search)
+rf.model2
+```
+#### Accuracy is highest at mtry = 2 (96%)
+
+# Build Test Model
+
+## Predict Test data with second random forest model
+```{r}
+probs <- predict(rf.model2, test, type = "prob")
+head(probs)
+```
+
+```{r}
+pred.class <- predict(rf.model2, test, type = "raw")
+head(pred.class)
+```
+
+# Compare predicted results with actual classifications
+```{r}
+comparison <- table(test$Class, pred.class)
+comparison
+```
+
+# Final Thoughts:
+
+##### I'm happy with the results of this model
+##### Only 1 tumor in 699 was predicted as benign but
+##### was actually malignant; this boasts great accuracy
+##### In the real world, a medical research team would strive
+##### to predict malignancy with 100% accuracy, but this random
+##### forest model has done well to predict the test data
+
+##### The model also predicted 4 incorrect malignant tumors,
+##### which ended up being benign in reality
+##### However, this inaccuracy is not as big of a deal in 
+##### application because incorrectly removing a benign tumor
+##### has far less reprecussions (mainly cost-based) than does
+##### incorrectly leaving a malignant tumor inside a patient
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
