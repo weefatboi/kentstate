@@ -1,0 +1,460 @@
+---
+title: "Assignment 2 - Carrier Delay Visualization"
+author: "Gordon Wall (gwall2)"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# workspace set-up
+```{r, results=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(caret)
+library(skimr)
+library(data.table)
+library(grid)
+library(cowplot)
+```
+
+## import relevant data
+```{r}
+carrier.df <- fread("On_Time_Marketing_Carrier_On_Time_Performance_(Beginning_January_2018)_2018_1.csv")
+```
+
+## examine data
+```{r}
+skim_without_charts(carrier.df)
+```
+##### A lot of columns have nearly all entries missing
+##### these columns provide nothing for analysis and can
+##### be removed
+
+##### I will filter for variables that have a complete_rate
+##### of less than 1% and create a column names index from this
+##### which I will then use to remove them from the data frame
+
+## separate drop-worthy columns
+```{r}
+drops <- carrier.df %>% skim() %>% dplyr::filter(complete_rate < 0.01) 
+
+drop.index <- drops[,"skim_variable"]
+
+t <- as.vector(drop.index$skim_variable)
+```
+
+## drop by drop.index
+```{r}
+carrier.clean <- select(carrier.df, -t)
+```
+##### the dataframe is much cleaner now, free of noisey variables
+
+##### for further example, things like year and quarter can be dropped for this
+##### analysis since every observation is from january, 2018 (1st quarter)
+##### and all entries will be the same in these columns
+##### other variables will be dropped with this same logic
+
+## separate drop-worthy columns (second time thru)
+```{r}
+### dropping columns with more than 600,000 empty data entries 
+
+drops2 <- carrier.clean %>% skim() %>% dplyr::filter(character.empty > 600000)
+
+drop.index2 <- drops2[,"skim_variable"]
+
+q <- as.vector(drop.index2$skim_variable)
+```
+
+## drop by second drop.index
+```{r}
+carrier.clean <- select(carrier.clean, -q)
+```
+
+```{r}
+### dropping year, month, quarter, day of month columns
+
+carrier.clean <- carrier.clean[,-c("Year", "Quarter", "Month", "DayofMonth")]
+```
+
+#### there are variables described in the readme.html
+#### file stating that some columns have codes which could've
+#### been used for multiple different carriers
+#### these destroy the integriy of unique IDs and will be dropped now
+
+```{r}
+### dropping columns that start with IATA
+### the non-unique ones
+
+carrier.clean <- carrier.clean %>% select(-starts_with("IATA"))
+```
+
+```{r}
+### dropping other irrelevant/redundant columns
+
+carrier.clean <- carrier.clean[,!c("OriginCityName", "OriginStateName")]
+
+carrier.clean <- carrier.clean[,!c("Duplicate")]
+
+carrier.clean <- carrier.clean[,!c("DestStateName", "DestCityName")]
+
+carrier.clean <- carrier.clean[,!c("Marketing_Airline_Network", "Operated_or_Branded_Code_Share_Partners", "Tail_Number")]
+```
+
+## convert to proper variable types
+```{r}
+carrier.clean$FlightDate <- as.Date(carrier.clean$FlightDate, "%Y-%m-%d")
+
+carrier.clean$DayOfWeek <- as.factor(carrier.clean$DayOfWeek)
+
+carrier.clean$Origin <- as.factor(carrier.clean$Origin)
+
+carrier.clean$OriginState <- as.factor(carrier.clean$OriginState)
+
+carrier.clean$Dest <- as.factor(carrier.clean$Dest)
+
+carrier.clean$DestState <- as.factor(carrier.clean$DestState)
+
+carrier.clean <- carrier.clean %>% rename(operating.airline = `Operating_Airline `)
+carrier.clean$operating.airline <- as.factor(carrier.clean$operating.airline)
+
+carrier.clean$DistanceGroup <- as.factor(carrier.clean$DistanceGroup)
+
+carrier.clean$Cancelled <- as.factor(carrier.clean$Cancelled)
+carrier.clean$Diverted <- as.factor(carrier.clean$Diverted)
+
+carrier.clean$ArrTimeBlk <- as.factor(carrier.clean$ArrTimeBlk)
+carrier.clean$DepTimeBlk <- as.factor(carrier.clean$DepTimeBlk)
+```
+
+# Final Check of Clean Dataset
+```{r}
+skim_without_charts(carrier.clean)
+```
+
+# Data Visualization
+
+## Question 1 & 2
+##### What is the pattern of arrival traffic and departure traffic delays with respect to days and weeks?
+```{r}
+subset1a <- carrier.clean %>% 
+  select(FlightDate, ArrDelayMinutes) %>% 
+  group_by(FlightDate) %>% 
+  summarise(mean.arrdelay = mean(ArrDelayMinutes, na.rm = TRUE))
+
+plot1a <- ggplot(subset1a, aes(FlightDate, mean.arrdelay)) +
+    geom_bar(stat = "identity", aes(col = mean.arrdelay, fill = mean.arrdelay)) +
+    ylab("Avg Arrival Delay (min)") +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          legend.position = "none")
+  
+subset1b <- carrier.clean %>% 
+  select(FlightDate, DepDelayMinutes) %>% 
+  group_by(FlightDate) %>% 
+  summarise(mean.depdelay = mean(DepDelayMinutes, na.rm = TRUE))
+
+plot1b <- ggplot(subset1b, aes(FlightDate, mean.depdelay, col = mean.depdelay, fill = mean.depdelay)) +
+    geom_bar(stat = "identity") +
+    ylab("Avg Departure Delay (min)") +
+    xlab("Flight Date") +
+    theme_minimal() +
+    theme(axis.ticks.x = element_line(color = "black"), legend.position = "none")
+  
+cowplot::plot_grid(plot1a, plot1b, align="v", ncol = 1, rel_heights = c(0.50, 0.50))
+```
+
+##### Can you interpret the traffic delays?
+
+######## The graph is of Avg Arrival/Departure Delays across the date range of
+######## January 1st thru 31st. The bars outline the avg delay on each day and
+######## the x axis ticks section off every 7 days, with each tick being the 
+######## start of a new seven-day cycle (week). Interpreting the traffic delays
+######## in this format reveal that the month of January, on average, decreases
+######## steadily in traffic over the duration of the month, with the middle of the
+######## month seeing a few peak high traffic delay spikes in the second and third weeks.
+######## Further interpretation could reveal that these spikes have something to do
+######## with winter storms in the heart of cold January...
+
+## Question 3
+##### Which Airport (‘Origin Airport’) has highest departure delay?
+```{r}
+subset3 <- carrier.clean %>% 
+  select(Origin, DepDelayMinutes) %>% 
+  group_by(Origin) %>% 
+  summarise(sum.airportdelay = sum(DepDelayMinutes, na.rm = TRUE)) %>%
+  arrange(desc(sum.airportdelay)) %>%
+  slice(1:25)
+
+options(scipen = 100000)
+
+plot3 <- ggplot(subset3, aes(reorder(Origin, sum.airportdelay), sum.airportdelay)) +
+  geom_bar(stat = "identity", aes(col = sum.airportdelay, fill = sum.airportdelay)) +
+  coord_flip() +
+  ylab("Total January Departure Delay (min)") +
+  xlab("Origin Airport") +
+  ggtitle("Top 25 Most Delayed Airports on Departure") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none")
+  
+
+plot3
+```
+##### Chicago has the highest departure delay.
+
+
+## Question 4
+##### Which Airport has highest arrival delay?
+```{r}
+subset4 <- carrier.clean %>% 
+  select(Origin, ArrDelayMinutes) %>% 
+  group_by(Origin) %>% 
+  summarise(sum.airportdelay = sum(ArrDelayMinutes, na.rm = TRUE)) %>%
+  arrange(desc(sum.airportdelay)) %>%
+  slice(1:25)
+
+plot4 <- ggplot(subset4, aes(reorder(Origin, sum.airportdelay), sum.airportdelay)) +
+  geom_bar(stat = "identity", aes(col = sum.airportdelay, fill = sum.airportdelay)) +
+  coord_flip() +
+  ylab("Total January Arrival Delay (min)") +
+  xlab("Origin Airport") +
+  ggtitle("Top 25 Most Delayed Airports on Arrival") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none")
+  
+
+plot4
+```
+##### Chicago also has the highest arrival delay.
+
+
+## Question 5
+##### How do you relate the delay pattern to the distance travelled?
+```{r}
+subset5 <- carrier.clean %>%
+  select(DistanceGroup, Distance, ArrDelayMinutes, DepDelayMinutes) %>%
+  arrange(DistanceGroup, Distance, ArrDelayMinutes, DepDelayMinutes) %>%
+  group_by(DistanceGroup) %>%
+  summarise(mean.arrdelay = mean(ArrDelayMinutes, na.rm = TRUE), mean.depdelay = mean(DepDelayMinutes, na.rm = TRUE))
+
+plot5a <- ggplot(subset5, aes(DistanceGroup, mean.arrdelay)) +
+  geom_bar(stat= "identity", aes(col = mean.arrdelay, fill = mean.arrdelay)) +
+  geom_text(label = round(subset5$mean.arrdelay, 2), col = "white", fontface = "bold", position = position_stack(vjust = 0.5)) +
+  ylab("Avg Arrival Delay (min)") +
+  ggtitle("Avg Arrival/Departure Delay by Distance Group") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = "none")
+
+plot5b <- ggplot(subset5, aes(DistanceGroup, mean.depdelay)) +
+  geom_bar(stat= "identity", aes(col = mean.depdelay, fill = mean.depdelay)) +
+  geom_text(label = round(subset5$mean.depdelay, 2), col = "white", fontface = "bold", position = position_stack(vjust = 0.5)) +
+  ylab("Avg Departure Delay (min)") +
+  xlab("Distance Group (miles)") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none", axis.text.x = element_text(size = 7, face = "bold")) +
+  scale_x_discrete(labels = c("< 250", "250-499", "500-749", "750-999", "1000-1249", "1250-1499", "1500-1749", "1750-1999", "2000-2249", "2250-2499", ">= 2500"))
+
+cowplot::plot_grid(plot5a, plot5b, align="v", ncol = 1, rel_heights = c(0.50, 0.50))
+```
+##### It appears that distance travelled has a relatively uncorrelated effect
+##### on delay, as shown above. I originally speculated that delay would increase
+##### with distance, but this was a naive assumption at best. Turns out the highest
+##### average delays come from the shortest three-five mileage categories. Maybe
+##### this has something to do with the fact that longer flights have the ability to 
+##### make up for lost delay time by reaching and maintaing cruising altitude at a faster
+##### speed...
+
+
+## Question 6
+##### Is there any correlation between weather delay and carrier delay?
+```{r}
+subset6 <- carrier.clean %>% 
+  select(WeatherDelay, CarrierDelay) %>%
+  group_by(WeatherDelay) %>%
+  summarise(mean.carrierdelay = mean(CarrierDelay, na.rm = TRUE)) %>%
+  na.omit()
+
+plot6 <- ggplot(subset6, aes(WeatherDelay, mean.carrierdelay)) +
+  geom_point(stat = "identity", aes(col = mean.carrierdelay, fill = mean.carrierdelay, size = mean.carrierdelay)) +
+  ylab("Carrier Delay (min)") +
+  xlab("Weather Delay (min)") +
+  ggtitle("Carrier Delay vs Delay from Weather") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none")
+
+plot6
+```
+##### From the above visual, it seems that although some weather delays have impacted
+##### carrier delay, the vast majority of data shows that carrier delay has been virtually
+##### zero even in the presence of increasing weather delay. You can observe some spikes in
+##### carrier delay, which seem random and uncorrelated with weather delay. This dataset would
+##### have to be cross-referenced with storm data in the same date-range to determine if recorded
+##### heavy storms correlated with the spikes in carrier delay...
+
+
+## Question 7
+##### What is the delay pattern you can find in respective states?
+```{r}
+subset7 <- carrier.clean %>% 
+  select(OriginState, DepDelayMinutes) %>% 
+  group_by(OriginState) %>% 
+  summarise(sum.statedelay = sum(DepDelayMinutes, na.rm = TRUE)) %>%
+  arrange(desc(sum.statedelay))
+
+plot7 <- ggplot(subset7, aes(reorder(OriginState, sum.statedelay), sum.statedelay)) +
+  geom_bar(stat = "identity", aes(col = sum.statedelay, fill = sum.statedelay)) +
+  coord_flip() +
+  ylab("Total January Delay (min)") +
+  xlab("Origin State") +
+  ggtitle("Total January Delay Classified by Origin Flight State") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none", axis.text.y = element_text(size = 5, face = "bold"))
+  
+
+plot7
+```
+##### It seems from the chart above that delay is typically higher in more
+##### trafficked and popular transportation states. The largest delays come from
+##### states like California (highest), Illinois (third) and New York (fifth),
+##### whereas the lowest delays are sported by more remote states like Arkansas.
+
+
+## Question 8
+##### How many delayed flights were cancelled? (approximation)
+```{r}
+subset8 <- carrier.clean %>%
+  mutate(Delayed = if_else(DepDelayMinutes>0, TRUE, FALSE), Cancelled = if_else(Cancelled == 1, TRUE, FALSE)) %>%
+  select(Delayed, Cancelled) %>%
+  na.omit()
+
+subset8 <- subset8 %>% 
+  group_by(Delayed, Cancelled) %>%
+  summarise(total = n()) %>%
+  mutate(prop = total/sum(total)) %>%
+  filter(Delayed == TRUE)
+
+plot8 <- ggplot(subset8, aes(Cancelled, total)) +
+  geom_bar(stat = "identity", position = "dodge", aes(col = Cancelled, fill = Cancelled)) +
+  geom_text(label = subset8$total, col = "black", fontface = "bold", position = position_stack(vjust = 0.9)) +
+  ylab("Number of Flights") +
+  xlab("Cancelled?") +
+  ggtitle("Number of Flights Cancelled Due to Delay") +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "right", axis.text.x = element_text(size = 12, face = "bold"))
+  
+  
+plot8
+```
+##### As shown by the chart above of all delayed flights, only 274 flights
+##### were actually cancelled because of the delay. Likely due to the fact that
+##### the economy of carrier shipping would rather take a small loss from delay
+##### than cancel all together. The people of the USA need their products after all!!
+
+
+## Question 9
+##### How many delayed flights were diverted? (approximation)
+```{r}
+subset9 <- carrier.clean %>%
+  mutate(Delayed = if_else(DepDelayMinutes>0, TRUE, FALSE), Diverted = if_else(Diverted == 1, TRUE, FALSE)) %>%
+  select(Delayed, Diverted) %>%
+  na.omit()
+
+subset9 <- subset9 %>% 
+  group_by(Delayed, Diverted) %>%
+  summarise(total = n()) %>%
+  mutate(prop = total/sum(total)) %>%
+  filter(Delayed == TRUE)
+
+plot9 <- ggplot(subset9, aes(Diverted, total)) +
+  geom_bar(stat = "identity", position = "dodge", aes(col = Diverted, fill = Diverted)) +
+  geom_text(label = subset9$total, col = "black", fontface = "bold", position = position_stack(vjust = 0.9)) +
+  ylab("Number of Flights") +
+  xlab("Diverted?") +
+  ggtitle("Number of Flights Diverted Due to Delay") +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "right", axis.text.x = element_text(size = 12, face = "bold"))
+  
+  
+plot9
+```
+##### Similar findings to question 8. Only 640 flights were diverted in the face of delay
+
+
+## Question 10
+##### What time of the day do you find arrival delays?
+```{r}
+subset10 <- carrier.clean %>%
+  select(ArrTimeBlk, ArrDelayMinutes) %>%
+  group_by(ArrTimeBlk) %>%
+  summarise(mean.arrdelay = round(mean(ArrDelayMinutes, na.rm = TRUE), 4)) %>%
+  arrange(ArrTimeBlk)
+
+plot10 <- ggplot(subset10, aes(ArrTimeBlk, mean.arrdelay)) +
+  geom_bar(stat="identity", aes(col = mean.arrdelay, fill = mean.arrdelay)) +
+  ylab("Avg Arrival Delay") +
+  xlab("Time of Day Block") +
+  ggtitle("Arrival Delay vs Time of Day") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none", axis.text.x = element_text(size = 8, face = "bold", angle = 45))
+  
+plot10
+```
+##### It appears that arrival delay peaks around the end of the 24-hour cycle;
+##### within the 8-10 PM range
+
+
+## Question 11
+##### What time of the day do you find departure delays?
+```{r}
+subset11 <- carrier.clean %>%
+  select(DepTimeBlk, DepDelayMinutes) %>%
+  group_by(DepTimeBlk) %>%
+  summarise(mean.depdelay = round(mean(DepDelayMinutes, na.rm = TRUE), 4)) %>%
+  arrange(DepTimeBlk)
+
+plot11 <- ggplot(subset11, aes(DepTimeBlk, mean.depdelay)) +
+  geom_bar(stat="identity", aes(col = mean.depdelay, fill = mean.depdelay)) +
+  ylab("Avg Departure Delay") +
+  xlab("Time of Day Block") +
+  ggtitle("Departure Delay vs Time of Day") +
+  theme_minimal() +
+  theme(axis.ticks.x = element_line(color = "black"), legend.position = "none", axis.text.x = element_text(size = 8, face = "bold", angle = 45))
+  
+plot11
+```
+##### Similar findings to question 10.
+##### It appears that arrival delay peaks and flattens off
+##### within the 7-10 PM range.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
