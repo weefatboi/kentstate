@@ -1,0 +1,95 @@
+---
+title: "R Notebook"
+author: "Gordon Wall (gwall2)"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# loading relevant packages...
+```{r, message=FALSE, warning=FALSE, echo=FALSE, results=FALSE}
+library(tidyverse)
+library(data.table)
+library(skimr)
+library(arules)
+```
+
+# import and examine data...
+```{r}
+groceries.df <- read.transactions("~/r-directory/grocery-basket/groceries_v2.csv", sep = ",")
+
+summary(groceries.df)
+```
+
+# confirm that file was read properly by examining first 10 baskets
+```{r}
+inspect(groceries.df[1:10])
+```
+
+# further examine data; plot of top ten most frequent items in dataset
+```{r}
+itemFrequencyPlot(groceries.df, topN = 10)
+```
+
+##### the transactions in this dataset most frequently sport purchases
+##### of whole milk, followed by other vegetables and buns
+
+# train model and extract association rules
+```{r}
+rules <- apriori(groceries.df, parameter = list(support =0.01, confidence = 0.5))
+```
+
+
+# evaluate model performance
+```{r}
+summary(rules)
+```
+##### there have been 15 rules extracted from the data set at 0.01 support and 0.5 confidence
+##### the highest lift in this rule set is 3.031
+
+# check top 3 rules by lift
+```{r}
+inspect(sort(rules, by = "lift")[1:3])
+```
+##### the number one rule suggests that people who buy citrus fruit and/or root vegetables
+##### will also buy an item from the category "other vegetables" as well
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### References ####
+#### https://rpubs.com/emzak208/281776 ####
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
