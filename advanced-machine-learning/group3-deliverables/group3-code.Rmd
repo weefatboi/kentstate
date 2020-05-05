@@ -1,0 +1,512 @@
+---
+title: "Deep Learning with Twitter Sentiment Analysis"
+author: "Group 3: Shude Guo, Gordon Wall,Aditya Putta"
+output:
+  html_document:
+    highlight: haddock
+    number_sections: no
+    theme: lumen
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  word_document:
+    toc: yes
+    toc_depth: '3'
+---
+# [TABLE OF CONTENTS]
+0. Workspace Setup
+1. Problem
+2. Data
+3. Technique
+4. Refinement
+5. Conclusions
+
+
+
+# 0. WORKSPACE SETUP
+
+Regarding our workspace we employ the use of several important packages, among them being *tidyverse* for data cleaning, *keras* for deep learning, and *rtweet and twitteR* for accessing Twitter's api. The steps to authenticate and access Twitter are shown below: 
+
+### load relevant libraries
+```{r, message=FALSE, results=FALSE, warning=FALSE}
+library(caret)
+library(tidyverse)
+library(skimr)
+library(plyr)
+library(data.table)
+library(bit64)
+library(keras)
+# install.packages('rtweet')
+library(rtweet)
+# install.packages('twitteR')
+library(twitteR)
+library(ggridges)
+```
+
+### create api key variables
+```{r, eval = FALSE}
+## store api keys 
+api_key <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+api_secret_key <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+access_token <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+access_token_secret <- "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+```
+
+### generate auth token & connect to twitter dev app
+```{r, eval = FALSE}
+## authenticate via access token
+token <- create_token(
+  app = "MyTwoSents",
+  consumer_key = api_key,
+  consumer_secret = api_secret_key,
+  access_token = access_token,
+  access_secret = access_token_secret)
+```
+
+### confirm successful authentication
+```{r, eval = FALSE}
+get_token()
+```
+
+
+
+# 1. PROBLEM
+
+The problem at hand is **predicting how stocks will behave**, however, this isn't always as clear as crunching spreadsheets of timeseries financial data. Often times people trade stocks based on experience, on privileged industry information, on their personal tolerane to risk, and even on gut intuition alone. Thus, we wanted to take an alternate approach at determining whether a stock is *good* or *bad* by using sentiment from tweets surrounding those stocks to assign a positive/negative score. From there, a deep learning model should hypothetically be able to classify stocks as positive or negative based on the sentiment scores learned from the training data. Our methodology is below:
+
+
+
+# 2. DATA
+
+For the data aspect of this project, we first utilize Twitter api to mine tweet data regarding four stock indices; **Crude Oil, Gold, NSE, and DOW**.
+
+We limit the api call to hashtags related to these stocks, filter by tweets in english, filter again by time period (since august 2019), and opt not to include retweets to avoid duplicative text. Next, we convert the resulting tweet lists to dataframes for easy manipulation and write them to csv files so we can access the raw stock data later, if needed. These steps are shown below:
+
+### search & import tweets by hashtag
+```{r, eval = FALSE}
+crude_tweet <- search_tweets("#oil", n=20000, lang= "en", since='2019-08-01', until='2020-05-01', include_rts = FALSE)
+gold_tweet <- search_tweets("#gold", n=20000, lang= "en", since='2019-08-01', until='2020-05-01', include_rts = FALSE)
+nse_tweet <- search_tweets("#nse", n=20000, lang= "en", since='2019-08-01', until='2020-05-01', include_rts = FALSE)
+dow_tweet <- search_tweets("#djia", n=20000, lang= "en", since='2019-08-01', until='2020-05-01', include_rts = FALSE)
+```
+
+### convert tweet lists to dataframes
+```{r, eval = FALSE}
+crude_tweet <- twListToDF(crude_tweet)
+gold_tweet <- twListToDF(gold_tweet)
+nse_tweet <- twListToDF(nse_tweet)
+dow_tweet <- twListToDF(dow_tweet)
+```
+
+### write tweet data to csv files in case of future need
+```{r, eval = FALSE}
+write.csv(crude_tweet,"crude_tweet.csv")
+write.csv(gold_tweet,"gold_tweet.csv")
+write.csv(nse_tweet,"nse_tweet.csv")
+write.csv(dow_tweet,"dow_tweet.csv")
+```
+
+Now, we create a function that will serve us with the following steps:
+1. Receive tweet text as input 
+2. Remove sentence pattern, split by word and unlist them 
+3. Compare words to positive/negative indices
+4. Sum positive words/ sum negative words in each tweet
+5. Produce difference of positive vs. negative words
+6. Score tweets based on that difference
+NOTE: this process will, by definition, determine the *sentiment* of each tweet. The sentiment scores can, and will, go on to be used as labels for the training data which will fuel the learning of our deep learning model.
+
+### select text column from tweet sets
+```{r, eval = FALSE}
+crude_text  <- crude_tweet$text
+gold_text  <- gold_tweet$text
+nse_text  <- nse_tweet$text
+dow_text <- dow_tweet$text
+```
+
+### load positive/negative words indices
+```{r, eval = FALSE}
+positive_word = readLines("positive-words.txt")
+
+negative_word = readLines("negative-words.txt")
+```
+
+Note: above are lists of english words determined to have positive or negative sentiment that we downloaded from the internet
+
+### create tweet-processing function
+```{r, eval = FALSE}
+# define function
+score_sentiment = function(sentences, positive_word, negative_word,.progress='none')
+{
+  scores = laply(sentences, function(sentence, positive_word, negative_word) {
+    
+    # format sentences to remove pattern
+    sentence = gsub('[[:punct:]]', '', sentence)
+    
+    sentence = gsub('[[:cntrl:]]', '', sentence)
+    
+    sentence = gsub('\\d+', '', sentence)
+    
+    # convert all sentence to lower case
+    sentence = tolower(sentence)
+    
+    # split sentences into individual words
+    word_list = str_split(sentence, '\\s+')
+    
+    # unlist words
+    words = unlist(word_list)
+    
+    # compare tweet words to positive/negative indices
+    positive_matches = match(words, positive_word)
+    
+    negative_matches = match(words, negative_word)
+    
+    # determine, by logical TRUE/FALSE. whether tweet words are pos or neg
+    # and exclude NA values
+    positive_matches = !is.na(positive_matches)
+    
+    negative_matches = !is.na(negative_matches)
+    
+    # sum and take difference of pos vs. neg
+    score = sum(positive_matches) - sum(negative_matches)
+    
+    # return the score of each tweet
+    return(score)
+    
+  }, positive_word, negative_word, .progress=.progress)
+  
+  scores.df = data.frame(score=scores, text=sentences)
+  
+  return(scores.df)
+  
+}
+```
+
+Next, we apply the scoring function to each of the four tweet lists and visualize the raw distribution of score by commodity just to gain some overview of our data. 
+
+### apply score function and visualize
+```{r message=FALSE, warning=FALSE, eval = FALSE}
+crude_score = score_sentiment(crude_text,positive_word,negative_word,.progress='text')
+gold_score = score_sentiment(gold_text,positive_word,negative_word,.progress='text')
+nse_score = score_sentiment(nse_text,positive_word,negative_word,.progress='text')
+dow_score = score_sentiment(dow_text,positive_word,negative_word,.progress='text')
+```
+`
+
+Finally, we add commodity names and code assignments to our tweet lists, combine and save them as one master dataset of all four stocks.
+
+### combine and save
+```{r, eval = FALSE}
+# add commodity name column
+crude_score$commodity = "Crude"
+gold_score$commodity = "Gold"
+nse_score$commodity = "Nse"
+dow_score$commodity = "Dow"
+
+# add commodity code column
+crude_score$code = "WTI"
+gold_score$code = "AUX"
+nse_score$code = "Nse"
+dow_score$code = "Dow"
+
+tot_data <- rbind(nse_score,dow_score,crude_score,gold_score)
+
+write.csv(tot_data,"tot_data.csv")
+```
+
+```{r echo=FALSE,fig.align="center"}
+tot_data <- read_csv("tot_data.csv")
+
+library(ggridges)
+library(ggplot2)
+library(tidyverse)
+dat <- (tot_data %>% filter(score >-3 & score <3))
+
+ggplot(dat, aes(x = score, y = commodity)) +
+  geom_density_ridges() +
+  theme_ridges() + 
+  theme(legend.position =  "top",
+        legend.justification = "left",
+        legend.title = element_blank(),
+        axis.text.y = element_text(face = "bold",size = 14),
+        axis.title.y = element_text(size = 15),
+        title = element_text(size = 18),
+        legend.text = element_text(size = 12))+
+  labs(
+    x = "Sentiment",
+    y = "Asset Class",
+    title = "Sentiment Comparision For Asset Class",
+    subtitle = "Ranking Sentiment based on count"
+    )  +   theme(
+      axis.title.x = element_text(hjust = 0.05),
+      )
+
+```
+
+# 3. TECHNIQUE
+
+A discussion of technique is necessary at this point as there are many considerations surrounding natural language processing. How do you treat abbreviated words? Is preserving sentence order worth the extra computational expenditure? What deep learning model is best suited for text sentiment? These, and many more, are the questions we asked during this phase of the project. We began by attempting work with a convolutional network, building covnet layers into our model to classify the score of each tweet. Covnets are most commonly used for image classification, but we had difficulty getting it to pickup sentiment information from the feature space (containing tweet words) like it would otherwise pick up patterns from a feature space containing the pixels in a photo. The results of this were underwhelming, so we opted to build our base model as a keras sequential model with a dense layer.
+
+Though, before building the model we first filtered our master tweet dataset to only scores of **-2 (very bad), -1 (bad), 1 (good), and 2 (very good). Given the histogram view of the data, there weren't many scores at the extremes (scores >= 3 or <= -3) which allowed for us to re-adjust our scoring scale. We then pick a random sample of 23,000 tweets for training and 2,000 for testing. Finally, we look at a visualization of our newly score-filtered data. Steps below:
+
+### filter by score, then sample
+```{r}
+tot_data <- read_csv("tot_data.csv")
+
+data <- tot_data %>% filter( score>-3 & score <3 & score !=0) #
+
+train_data <- sample_n(data,23000)
+
+test_data <- sample_n(data,2000) 
+```
+
+### visualize filtered data
+```{r}
+ggplot(data,aes(x = factor(score), fill = score)) +
+  geom_bar(alpha = 0.8) +
+  guides(fill = FALSE)+ theme_classic()
+```
+
+Next, we tokenize the data; a necessary step for this deep learning model to be successful. Below we convert the text of each tweet to a series of integers assigned to each distinct word. Then we assign the text tokenizer a maximum amount of features to consider (in this case, the top 100 most frequent). Finally, we fit the tokenizer to the data. Steps below:
+
+### tokenize and fit
+```{r}
+text_train <- train_data$text
+text_test <- test_data$text
+
+max_features <- 100
+tokenizer <- text_tokenizer(num_words = max_features)
+
+tokenizer %>% 
+  fit_text_tokenizer(text_train)
+
+# ouptut top 3 words from index for confirmation
+tokenizer$word_index %>% head(3)
+```
+
+Now, using the word index developed by the tokenizer, we convert our tweet text in both sets to integer sequences. These sequences aren't quite enough for the model to understand, however. Thus, we use on-hot encoding methods to further convert the integer values in each sequence to binary integer vectors that possess a 1 for the index of an integer and zeros for all else. We repeat this one-hot encoding process for the *labels* of our data as well; these labels will be how the model determines how to classify tweets in the test set. Steps below:
+
+### sequence conversion and encoding
+```{r}
+sequences <- texts_to_sequences(tokenizer, text_train)
+sequences_2 <- texts_to_sequences(tokenizer, text_test)
+
+one_hot_train_text <- sequences_to_matrix(tokenizer, sequences, mode = "binary")
+one_hot_test_text <- sequences_to_matrix(tokenizer, sequences_2, mode = "binary")
+```
+
+### encoding of labels
+```{r}
+train_labels <- train_data$score
+test_labels <- test_data$score
+to_one_hot <- function(labels, dimension = 4) {
+results <- matrix(0, nrow = length(labels), ncol = dimension)
+for (i in 1:length(labels))
+results[i, labels[[i]]] <- 1
+results
+}
+one_hot_train_labels <- to_one_hot(train_labels)
+one_hot_test_labels <- to_one_hot(test_labels)
+```
+
+Finally, we can build our basic sequential model with a dense layer and plot the results to determine how we should re-adjust our epoch levels. We build this model, compile, and fit it with a 30% split for validation data below:
+
+### base model (dense-layer)
+```{r,fig.align="center"}
+set.seed(0)
+model <- keras_model_sequential() %>%
+layer_dense(units = 64, activation = "relu", input_shape = c(100)) %>%
+layer_dense(units = 64, activation = "relu") %>%
+layer_dense(units = 4, activation = "softmax")
+
+summary(model)
+
+model %>% compile(
+optimizer = "rmsprop",
+loss = "categorical_crossentropy",
+metrics = c("accuracy"))
+
+history <- model %>% fit(
+  one_hot_train_text,
+  one_hot_train_labels,
+  epochs = 50,
+  batch_size = 200,
+  validation_split = 0.3
+  )
+
+plot(history)
+```
+
+After reviewing the model plot, we re-train from scratch with a new epoch limit of 2, since the history overfits past this point. Further, we predict on the test data with this re-trained model and evaluate the results below:
+
+### re-train base model
+```{r}
+model %>% fit(
+  one_hot_train_text,
+  one_hot_train_labels,
+  epochs = 2,
+  batch_size = 200,
+  )
+```
+
+### predict on test
+```{r}
+predictions <- model %>% predict(one_hot_test_text)
+
+# Each entry in predictions is a vector of length 4
+dim(predictions)
+
+# The coefficients in this vector sum to 1:
+sum(predictions[1,])
+
+# The largest entry is the predicted class—the class with the highest probability:
+which.max(predictions[500,])
+```
+
+### evaluate base model
+```{r}
+(eval_dense <- model %>% evaluate(one_hot_test_text,one_hot_test_labels))
+```
+
+
+
+# 4. REFINEMENT
+
+To refine and improve our model, we use two methods we learned in class that are well-suited for NLP. The first we try is adding an RNN layer. Because the model is recurrent, we hope it'll gain important sentiment information from the sequences of integers in our encoded tweet text. We hold the feature space constant at the top 100 most frequent words and cut the length of a tweet off after 20 words. We use categorical crossentropy as our loss because our objective is a multiclassification problem (-2, -1, 1, 2) and complete our output layer with softmax activation. The resulting output will be a four-dimensional vector that is trained to get as close to a 'correct' label as possible based on probability. RNN steps are below: 
+
+### basic RNN model
+```{r,fig.align="center"}
+# Number of words to consider as features
+max_features <- 100
+
+# Cuts off texts after this many words (among the max_features most commonwords)
+maxlen <- 20
+
+# Turns the lists of integers into a 2D integer tensor of shape (samples, maxlen)
+one_hot_train_text <- pad_sequences(one_hot_train_text, maxlen = maxlen)
+one_hot_test_text <- pad_sequences(one_hot_test_text, maxlen = maxlen)
+
+model <- keras_model_sequential() %>%
+layer_embedding(input_dim = max_features, output_dim = 4,input_length = maxlen) %>%
+layer_simple_rnn(units = 32) %>%
+layer_dense(units = 4, activation = "softmax")
+
+summary(model)
+
+model %>% compile(
+optimizer = "rmsprop",
+loss = "categorical_crossentropy",
+metrics = c("accuracy"))
+
+
+history <- model %>% fit(
+one_hot_train_text,
+one_hot_train_labels,
+epochs = 25,
+batch_size = 200,
+validation_split = 0.3
+)
+
+plot(history)
+```
+
+### re-train RNN at 16 epochs
+```{r}
+model %>% fit(
+one_hot_train_text,
+one_hot_train_labels,
+epochs = 16,
+batch_size = 200)
+```
+
+### evaluate RNN
+```{r}
+(eval_rnn <- model %>% evaluate(one_hot_test_text,one_hot_test_labels))
+```
+
+One final refinement we attempt is the use of long short-term memory in our deep learning network. We learned from class that LSTM is best suited for timeseries data as it can process and glean information from whole sequences at once through feedback connections. We hope this will help the model gain sentiment information from our encoded tweet sequences. Much of the model is now held constant; we add an lstm layer below:
+
+### LSTM model - further refinement
+```{r,fig.align="center"}
+model_lstm <- keras_model_sequential() %>%
+layer_embedding(input_dim = max_features, output_dim = 32) %>%
+layer_lstm(units = 32) %>%
+layer_dense(units = 4, activation = "softmax")
+
+model_lstm %>% compile(
+optimizer = "rmsprop",
+loss = "categorical_crossentropy",
+metrics = c("accuracy"))
+
+
+history_lstm <- model_lstm %>% fit(
+one_hot_train_text,
+one_hot_train_labels,
+epochs = 25,
+batch_size = 200,
+validation_split = 0.3
+)
+
+plot(history_lstm)
+```
+
+### re-train LSTM with 15 epochs
+```{r}
+model_lstm %>% fit(
+one_hot_train_text,
+one_hot_train_labels,
+epochs = 15,
+batch_size = 200)
+```
+
+### evaluate LSTM
+```{r}
+(eval_lstm <- model_lstm %>% evaluate(one_hot_test_text,one_hot_test_labels))
+```
+
+
+
+# 5. CONCLUSIONS
+
+
+Although our results are not ideal, they would be an important step on the way to improving a useable deep learning model in the real-world. Regarding the results, some limitations proved a detriment to the success of this model, mainly computational power related. Because connection to a cloud server proved in vain, we were forced to keep our train sample sizes small. Having millions more stock tweets scored by sentiment to learn from would give this model a more robust ability to classify our test data. Further, the success of these RNN techniques we implemented hinge on the idea of preserving tweet text *order* to gain vital sentiment information from the wording of tweets and not just the individual words themselves. An example of this would be using the word *crazy*, which would otherwise be negative by itself, to indicate that someone was amazing at a certain sport. This lingo usage is often the case with natural language and can drastically impact the meaning of a tweet. However, preserving and feeding this sequential text back through the model proves computationally expensive and we opted to lax on order preservation a bit to run the model more efficiently; a safely determined compromise as tweets about stocks seem more direct to the point than a more verbose movie review would be. Finally, we could change aspects of the model like the maximum feature space and length of each tweet. We could, say, include the top 100,000 most frequent english words in the feature space and provide *no limit* to the length of each tweet, which would provide the training model vastly more information to learn from.
+
+All that said, our model proved successful enough to simulate the preliminary stages of what would be months or even years of work on a machine-learning task force at a company, and we continue on to our presentation to compare our results with how the stock market as actually behaved since last August surrounding our for seleted stock indices. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
